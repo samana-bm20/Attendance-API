@@ -848,7 +848,7 @@ module.exports = {
   leaveCounts: (req, res) => {
     const empid = req.query.empid;
     try {
-      const leaveCountsQuery = `select Status, SUM(NoOfLeave) AS Count
+      const leaveCountsQuery = `select Status, count(Status) AS Count
       from LeaveRecord 
       where EmpID = '${empid}'
       group by  Status;`;
