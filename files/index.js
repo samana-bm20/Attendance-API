@@ -424,7 +424,7 @@ module.exports = {
       ,'${secondHalf}'
       ,'${reason}'
       ,'Pending')`;
-      db.connect(config, function (error) {
+      db.connect(config, function(error) {
         if (error) {
           console.log(error);
           return res.status(500).json({ status: 'NOK', data: error, message: 'Database connection error' });
@@ -811,12 +811,12 @@ module.exports = {
           @TotalDaysInMonth AS TotalDays,
           @WorkingDays AS WorkingDays,
           @TotalOff AS TotalOff,
-          @WorkingDays-(Present+Late) AS Absent,
+          @WorkingDays-(Present) AS Absent,
           Present,
         Late
       FROM (
           SELECT
-              SUM( CASE WHEN FORMAT(logintime ,'hh:mm') <= '09:00' THEN 1 ELSE 0 END   ) AS Present,
+              COUNT(logintime) AS Present,
               SUM( CASE WHEN FORMAT(logintime ,'hh:mm') > '09:00' THEN 1 ELSE 0 END   ) AS Late
           FROM(
             SELECT MIN(logintime) logintime
