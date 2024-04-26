@@ -374,8 +374,9 @@ module.exports = {
     const toDate = req.body.toDate.trim();
     const empName = req.body.empName.trim();
     const reason = req.body.reason.trim();
-    const secondHalf1 = req.body.secondHalf ? req.body.secondHalf.trim() : '';
-    const firstHalf1 = req.body.firstHalf ? req.body.firstHalf.trim() : '';
+    const secondHalf1 = req.body.secondHalf ? req.body.secondHalf.trim() : 'No';
+    const firstHalf1 = req.body.firstHalf ? req.body.firstHalf.trim() : 'No';
+    const NoOfLeave = req.body.NoOfLeave ? req.body.NoOfLeave.trim() : 0;
 
     // Check if the values are undefined or null
     if (secondHalf1 === undefined || secondHalf1 === null) {
@@ -418,13 +419,13 @@ module.exports = {
       ,'${empName}'
       ,'${fromDate}'
       ,'${toDate}'
-      ,'1'
+      ,${NoOfLeave}
       ,'0'
       ,'${firstHalf}'
       ,'${secondHalf}'
       ,'${reason}'
       ,'Pending')`;
-      db.connect(config, function(error) {
+      db.connect(config, function (error) {
         if (error) {
           console.log(error);
           return res.status(500).json({ status: 'NOK', data: error, message: 'Database connection error' });
