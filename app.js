@@ -47,8 +47,8 @@ app.use(bodyParser.json({ limit: "2048mb" }));
 app.use(bodyParser.urlencoded({ limit: "2048mb", extended: true }));
 app.use(bodyParser.json());
 
-const { checkInDB, insertInDB, displayName,
-    displayDesignation, displayEmpId, displayLoginTime,
+const { checkInDB, insertInDB, recordOutTime, displayName,
+    displayDesignation, displayEmpId, displayLoginTime, displayLogoutTime,
     allRecord, leaveRecord, fetchLeave, pendingRecord, 
     updateApprove, updateReject, monthlyRecord, 
     monthlyEmployee, checkAllAbsent, addLeave, employeeName, onLeave,
@@ -57,10 +57,12 @@ const { checkInDB, insertInDB, displayName,
 
 app.get('/login', checkInDB);
 app.post('/record', insertInDB);
+app.get('/outtime', recordOutTime);
 app.get('/name', displayName);
 app.get('/position', displayDesignation);
 app.get('/empid', displayEmpId);
 app.get('/time', displayLoginTime);
+app.get('/logout', displayLogoutTime);
 app.get('/calendar', allRecord);
 app.post('/leave', leaveRecord);
 app.get('/fetch', fetchLeave);

@@ -55,6 +55,29 @@ module.exports = {
       return res.status(500).json({ status: 'NOK', data: error, message: "Something went wrong. Please try again later" })
     }
   },
+  recordOutTime: (req, res) => {
+    const username = req.query.username;
+    try {
+      let outTimeQuery = `update LoginRecord
+      set logoutTime = GETDATE()
+      where username = '${username}'
+      and FORMAT(logintime, 'dd-MM-yyyy') = FORMAT(GETDATE(), 'dd-MM-yyyy');`;
+      db.connect(config, function (error) {
+        if (error)
+          console.log(error);
+        var request = new db.Request();
+        request.query(outTimeQuery, (error, result) => {
+          if (error) {
+            return res.status(404).json({ status: 'Not Found', data: error, message: "Error in inserting data" })
+          } else {
+            return res.status(200).json({ status: 'OK', data: result.recordset, message: "Logout details recorded successfully" })
+          }
+        });
+      });
+    } catch (error) {
+      return res.status(500).json({ status: 'NOK', data: error, message: "Something went wrong. Please try again later" })
+    }
+  },
   displayName: (req, res) => {
     const username = req.query.username;
     try {
@@ -148,6 +171,34 @@ module.exports = {
           else {
             const time = result.recordset[0].loginTime;
             return res.status(200).json({ status: 'OK', data: time, message: "Login time displayed" });
+          }
+        });
+      });
+    } catch (error) {
+      return res.status(500).json({ status: 'NOK', data: error, message: 'Internal server error' });
+    }
+  },
+  displayLogoutTime: (req, res) => {
+    const username = req.query.username;
+    try {
+      const fetchQuery = `SELECT 
+      FORMAT(MAX(logoutTime), 'hh:mm tt') AS logoutTime
+       FROM LoginRecord 
+       WHERE username = '${username}' 
+       AND FORMAT(logoutTime, 'dd-MM-yyyy') = FORMAT(GETDATE(), 'dd-MM-yyyy');`;
+      db.connect(config, function (error) {
+        if (error) {
+          console.log(error);
+          return res.status(500).json({ status: 'NOK', data: error, message: 'Database connection error' });
+        }
+        var request = new db.Request();
+        request.query(fetchQuery, (error, result) => {
+          if (error) {
+            return res.status(404).json({ status: 'Not Found', data: error, message: "Error fetching logout time" })
+          }
+          else {
+            const outtime = result.recordset[0].logoutTime;
+            return res.status(200).json({ status: 'OK', data: outtime, message: "Logout time displayed" });
           }
         });
       });
@@ -471,7 +522,8 @@ module.exports = {
           ROW_NUMBER() OVER (ORDER BY dr.Date) AS SNo,
           FORMAT(dr.Date, 'dd-MMM-yyyy') AS Date,
           DATENAME(WEEKDAY, Date) AS DayOfWeek,
-          FORMAT(MIN(lr.logintime), 'hh:mm tt') AS LoginTime
+          FORMAT(MIN(lr.logintime), 'hh:mm tt') AS LoginTime,
+          FORMAT(MAX(lr.logoutTime), 'hh:mm tt') AS LogoutTime
       FROM DateRange dr
       LEFT JOIN
       LoginRecord lr ON FORMAT(lr.logintime, 'dd-MMM-yyyy') = FORMAT(dr.Date, 'dd-MMM-yyyy')
