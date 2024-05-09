@@ -6,7 +6,7 @@ module.exports = {
     const username = req.query.username;
     const password = req.query.password;
     try {
-      let query = `SELECT [name], [username], [empid], [userType], [designation] FROM Users WHERE username = '${username}' AND password = '${password}';`;
+      let query = `SELECT [name], [username], [empid], [userType], [designation] FROM Users WHERE username = '${username}' AND password = '${password}' and isStatus='1';`;
       db.connect(config, function (error) {
         if (error) {
           console.log(error);
@@ -15,10 +15,14 @@ module.exports = {
         var request = new db.Request();
         request.query(query, (error, result) => {
           if (error) {
-            return res.status(404).json({ status: 'Not Found', data: error, message: "Invalid user" })
+            return res.status(404).json({ status: 'Not Found', data: error, message: "Invalid user" + query })
           } else {
-
-            return res.status(200).json({ status: 'OK', data: result.recordset, message: "User authenticated successfully" })
+            if (result.recordset.length > 0) {
+              return res.status(200).json({ status: 'OK', data: result.recordset, message: "User authenticated successfully" })
+            } 
+            else{
+              return res.status(200).json({ status: 'NOK', data: [], message: "Username or password is incorrect" })
+            }
           }
         });
       });
@@ -79,9 +83,9 @@ module.exports = {
     }
   },
   displayName: (req, res) => {
-    const username = req.query.username;
+    const empid = req.query.empid;
     try {
-      const nameQuery = `SELECT name FROM Users WHERE username = '${username}';`;
+      const nameQuery = `SELECT name FROM Users WHERE empid = '${empid}';`;
       db.connect(config, function (error) {
         if (error) {
           console.log(error);
@@ -127,9 +131,9 @@ module.exports = {
     }
   },
   displayEmpId: (req, res) => {
-    const username = req.query.username;
+    const name = req.query.name;
     try {
-      const idQuery = `SELECT empid FROM Users WHERE username = '${username}';`;
+      const idQuery = `SELECT empid FROM Users WHERE name = '${name}';`;
       db.connect(config, function (error) {
         if (error) {
           console.log(error);
@@ -294,6 +298,32 @@ module.exports = {
       return res.status(500).json({ status: 'NOK', data: error, message: "Something went wrong. Please try again later" })
     }
   },
+  fetchHoliday: (req, res) => {
+    try {
+      const fetchHolidayQuery = `SELECT 
+      FORMAT(Date, 'dd-MMM-yyyy') AS Date,
+      FORMAT(Date, 'dddd') AS Day,
+      HolidayName
+      from Holiday;`;
+      db.connect(config, function (error) {
+        if (error) {
+          console.log(error);
+          return res.status(500).json({ status: 'NOK', data: error, message: 'Database connection error' });
+        }
+        var request = new db.Request();
+        request.query(fetchHolidayQuery, (error, result) => {
+          if (error) {
+            return res.status(404).json({ status: 'Not Found', data: error, message: "Error fetching public holidays" })
+          }
+          else {
+            return res.status(200).json({ status: 'OK', data: result.recordset, message: "public holidays displayed" });
+          }
+        });
+      });
+    } catch (error) {
+      return res.status(500).json({ status: 'NOK', data: error, message: 'Internal server error' });
+    }
+  },
   fetchLeave: (req, res) => {
     const empname = req.query.empname;
     try {
@@ -327,18 +357,62 @@ module.exports = {
   pendingRecord: (req, res) => {
     const userType = parseInt(req.query.userType);
     const empid = req.query.empid;
+    const page = parseInt(req.query.page || 1);
+    const perPage = parseInt(req.query.perPage || 5);
+    const startRow = (page - 1) * perPage + 1;
+    const endRow = page * perPage;
+
     try {
       let pendingQuery = '';
 
       if (userType == 1) {
+        //		pendingQuery = `
+        //    SELECT * FROM (
+        //    SELECT
+        //    ROW_NUMBER() OVER (ORDER BY fromDate) AS SNo,
+        //  id,
+        // EmpID,
+        //         EmpName,
+        //       FORMAT(fromDate, 'dd-MMM-yyyy') AS fromDate,
+        //     FORMAT(toDate, 'dd-MMM-yyyy') AS toDate,
+        //   NoOfLeave,
+        // FullDay,
+        //          FirstHalf,
+        //        SecondHalf,
+        //      Reason,
+        //    RejectReason,
+        //  Status
+        //        FROM LeaveRecord
+        //    ) AS RowConstrainedResult
+        //  WHERE SNo BETWEEN ${startRow} AND ${endRow}`;
+
         pendingQuery = `select 
-        ROW_NUMBER() OVER (ORDER BY fromDate) AS SNo, id,
-        EmpID, EmpName, 
-        FORMAT(fromDate, 'dd-MMM-yyyy') AS fromDate,
-        FORMAT(toDate, 'dd-MMM-yyyy') AS toDate,
-        NoOfLeave, FullDay, FirstHalf, SecondHalf, Reason, RejectReason, Status
-        from LeaveRecord order by id desc`;
+      	  	ROW_NUMBER() OVER (ORDER BY fromDate) AS SNo, id,
+        	EmpID, EmpName, 
+        	FORMAT(fromDate, 'dd-MMM-yyyy') AS fromDate,
+        	FORMAT(toDate, 'dd-MMM-yyyy') AS toDate,
+        	NoOfLeave, FullDay, FirstHalf, SecondHalf, Reason, RejectReason, Status
+        	from LeaveRecord order by id desc`;
       } else if (userType == 2) {
+        //		 pendingQuery = `
+        //    SELECT * FROM (
+        //    SELECT
+        //    ROW_NUMBER() OVER (ORDER BY fromDate) AS SNo,
+        //  id,
+        //          EmpID,
+        //        EmpName,
+        //      FORMAT(fromDate, 'dd-MMM-yyyy') AS fromDate,
+        //    FORMAT(toDate, 'dd-MMM-yyyy') AS toDate,
+        //  NoOfLeave,
+        //FirstHalf,
+        //          SecondHalf,
+        //        Reason,
+        //      Status,
+        //    RejectReason
+        //FROM LeaveRecord
+        //        WHERE EmpID = '${empid}'
+        //    ) AS RowConstrainedResult
+        //  WHERE SNo BETWEEN ${startRow} AND ${endRow}`;
         pendingQuery = `select id,
         EmpID, EmpName, 
         FORMAT(fromDate, 'dd-MMM-yyyy') AS fromDate,
@@ -425,9 +499,10 @@ module.exports = {
     const toDate = req.body.toDate.trim();
     const empName = req.body.empName.trim();
     const reason = req.body.reason.trim();
-    const secondHalf1 = req.body.secondHalf ? req.body.secondHalf.trim() : 'No';
-    const firstHalf1 = req.body.firstHalf ? req.body.firstHalf.trim() : 'No';
-    const NoOfLeave = req.body.NoOfLeave ? req.body.NoOfLeave.trim() : 0;
+    const status = req.body.status.trim();
+    const NoOfLeave = req.body.NoOfLeave;
+    const secondHalf1 = req.body.secondHalf ? req.body.secondHalf.trim() : '';
+    const firstHalf1 = req.body.firstHalf ? req.body.firstHalf.trim() : '';
 
     // Check if the values are undefined or null
     if (secondHalf1 === undefined || secondHalf1 === null) {
@@ -470,12 +545,12 @@ module.exports = {
       ,'${empName}'
       ,'${fromDate}'
       ,'${toDate}'
-      ,${NoOfLeave}
+      ,'${NoOfLeave}'
       ,'0'
       ,'${firstHalf}'
       ,'${secondHalf}'
       ,'${reason}'
-      ,'Pending')`;
+      ,'${status}')`;
       db.connect(config, function (error) {
         if (error) {
           console.log(error);
@@ -546,7 +621,8 @@ module.exports = {
               sno: record.SNo,
               date: record.Date,
               day: record.DayOfWeek,
-              time: record.LoginTime
+              time: record.LoginTime,
+              out: record.LogoutTime
             }));
             return res.status(200).json({ status: 'OK', data: monthRecord, message: "monthly report displayed" });
           }
@@ -644,7 +720,7 @@ module.exports = {
   },
   employeeName: (req, res) => {
     try {
-      const empNameQuery = `SELECT empid, name FROM Users;`;
+      const empNameQuery = `SELECT name FROM Users;`;
       db.connect(config, function (error) {
         if (error) {
           console.log(error);
@@ -682,17 +758,17 @@ module.exports = {
       set @lastDay =  day(@endDate) --last day of month
 
       declare @day int
-      set @day = 2
+      set @day = @lastDay
 
       declare @days varchar(max)
       declare @CurrentDate datetime  
-      set @days = '['+CONVERT(varchar(10),@startDate,103) +' ('+DATENAME(weekday,@startDate)+')]'
-      set @CurrentDate=@startDate
-      WHILE (@day <= @lastDay)
+      set @days = '[' + CONVERT(varchar(10), @endDate, 103) + ' (' + DATENAME(weekday, @endDate) + ')]';
+      set @CurrentDate=@endDate;
+      WHILE (@day > 1)
       BEGIN
-          set @CurrentDate=DATEADD(d,1,@CurrentDate )
+          set @CurrentDate=DATEADD(d,-1,@CurrentDate );
           set @days = @days + ',['+CONVERT(varchar(10),@CurrentDate,103) +' ('+DATENAME(weekday,@CurrentDate)+')]'
-          set @day = @day + 1
+          set @day = @day - 1
       END
     declare @query varchar(max)
       set @query = 'SELECT *
@@ -852,7 +928,7 @@ module.exports = {
       -- Calculate the number of distinct working days (days with login records) in the current month
       DECLARE @WorkingDays INT = (
           SELECT COUNT(DISTINCT CAST(logintime AS DATE))
-          FROM [DGIS].[dbo].[LoginRecord]
+          FROM [DGIS_Latest].[dbo].[LoginRecord]
           WHERE FORMAT(logintime, 'yyyy-MM') = FORMAT(GETDATE(), 'yyyy-MM')
       );
       
@@ -873,7 +949,7 @@ module.exports = {
               SUM( CASE WHEN FORMAT(logintime ,'hh:mm') > '09:00' THEN 1 ELSE 0 END   ) AS Late
           FROM(
             SELECT MIN(logintime) logintime
-            FROM [DGIS].[dbo].[LoginRecord]
+            FROM [DGIS_Latest].[dbo].[LoginRecord]
             WHERE FORMAT(logintime, 'yyyy-MM') = FORMAT(GETDATE(), 'yyyy-MM')
               AND empid = '${empid}'
               GROUP BY CAST(LOGINTIME AS DATE)

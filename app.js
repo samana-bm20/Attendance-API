@@ -42,16 +42,15 @@ global.db = mssql;
 global.config = config;
 global.request = request;
 
-
 app.use(bodyParser.json({ limit: "2048mb" }));
 app.use(bodyParser.urlencoded({ limit: "2048mb", extended: true }));
 app.use(bodyParser.json());
 
 const { checkInDB, insertInDB, recordOutTime, displayName,
     displayDesignation, displayEmpId, displayLoginTime, displayLogoutTime,
-    allRecord, leaveRecord, fetchLeave, pendingRecord, 
-    updateApprove, updateReject, monthlyRecord, 
-    monthlyEmployee, checkAllAbsent, addLeave, employeeName, onLeave,
+    allRecord, leaveRecord, fetchHoliday, fetchLeave, pendingRecord, 
+    updateApprove, updateReject, monthlyRecord, monthlyEmployee, 
+    checkAllAbsent, addLeave, employeeName, onLeave,
     employeeRecord, deleteLeave, leavesUsed, futureLeaves,
     countDays, leaveCounts } = require('./files/index')
 
@@ -65,6 +64,7 @@ app.get('/time', displayLoginTime);
 app.get('/logout', displayLogoutTime);
 app.get('/calendar', allRecord);
 app.post('/leave', leaveRecord);
+app.get('/holiday', fetchHoliday);
 app.get('/fetch', fetchLeave);
 app.get('/pending', pendingRecord);
 app.put('/approve', updateApprove);
@@ -89,3 +89,4 @@ const port = process.env.SERVER_PORT
 app.listen(port, () => {
     console.log(`Server is running on port ${port}`);
 })
+
