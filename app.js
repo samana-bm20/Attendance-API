@@ -50,9 +50,9 @@ const { checkInDB, insertInDB, recordOutTime, displayName,
     displayDesignation, displayEmpId, displayLoginTime, displayLogoutTime,
     allRecord, leaveRecord, fetchHoliday, fetchLeave, pendingRecord, 
     updateApprove, updateReject, monthlyRecord, monthlyEmployee, 
-    checkAllAbsent, addLeave, employeeName, onLeave,
-    employeeRecord, deleteLeave, leavesUsed, futureLeaves,
-    countDays, leaveCounts } = require('./files/index')
+    checkAllAbsent, addLeave, LateCount, employeeName, empIdName,
+    onLeave, employeeRecord, singleEmployee, deleteLeave, leavesUsed,
+    empLeaves, futureLeaves, countDays, leaveCounts } = require('./files/index')
 
 app.get('/login', checkInDB);
 app.post('/record', insertInDB);
@@ -69,15 +69,18 @@ app.get('/fetch', fetchLeave);
 app.get('/pending', pendingRecord);
 app.put('/approve', updateApprove);
 app.post('/addleave', addLeave);
-
+app.get('/latecount', LateCount);
 app.put('/reject', updateReject);
 app.get('/month', monthlyRecord);
 app.get('/empdata', monthlyEmployee);
 app.get('/absent', checkAllAbsent);
 app.get('/empname', employeeName);
+app.get('/empidname', empIdName);
 app.get('/admin', employeeRecord);
+app.get('/singleEmp', singleEmployee);
 app.put('/delete', deleteLeave);
 app.get('/used', leavesUsed);
+app.get('/empleaves', empLeaves);
 app.get('/future', futureLeaves);
 app.get('/todayleave', onLeave);
 app.get('/countdays', countDays);
