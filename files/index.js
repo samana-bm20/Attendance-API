@@ -992,7 +992,7 @@ module.exports = {
     try {
       const empLeavesQuery = `SELECT 
       u.name AS EmpName, 
-      ISNULL((SUM(lr.NoOfLeave)),0) AS LeavesLeft
+      ISNULL(SUM(lr.NoOfLeave),0) AS LeavesUsed
       FROM Users u 
       LEFT JOIN 
         (
