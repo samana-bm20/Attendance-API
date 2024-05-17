@@ -48,11 +48,11 @@ app.use(bodyParser.json());
 
 const { checkInDB, insertInDB, recordOutTime, displayName,
     displayDesignation, displayEmpId, displayLoginTime, displayLogoutTime,
-    allRecord, leaveRecord, fetchHoliday, fetchLeave, pendingRecord, 
-    updateApprove, updateReject, monthlyRecord, monthlyEmployee, 
-    checkAllAbsent, addLeave, LateCount, employeeName, empIdName,
-    onLeave, employeeRecord, singleEmployee, deleteLeave, leavesUsed,
-    empLeaves, futureLeaves, countDays, leaveCounts } = require('./files/index')
+    allRecord, leaveRecord, monthHoliday, fetchHoliday, fetchLeave, 
+    pendingRecord, updateApprove, updateReject, monthlyRecord, 
+    monthlyEmployee, checkAllAbsent, addLeave, LateCount, employeeName, 
+    empIdName, onLeave, Birthday, employeeRecord, singleEmployee, deleteLeave, 
+    leavesUsed, empLeaves, futureLeaves, countDays, leaveCounts } = require('./files/index')
 
 app.get('/login', checkInDB);
 app.post('/record', insertInDB);
@@ -64,6 +64,7 @@ app.get('/time', displayLoginTime);
 app.get('/logout', displayLogoutTime);
 app.get('/calendar', allRecord);
 app.post('/leave', leaveRecord);
+app.get('/monthHoliday', monthHoliday);
 app.get('/holiday', fetchHoliday);
 app.get('/fetch', fetchLeave);
 app.get('/pending', pendingRecord);
@@ -83,6 +84,7 @@ app.get('/used', leavesUsed);
 app.get('/empleaves', empLeaves);
 app.get('/future', futureLeaves);
 app.get('/todayleave', onLeave);
+app.get('/bday', Birthday);
 app.get('/countdays', countDays);
 app.get('/count', leaveCounts);
 

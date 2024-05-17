@@ -212,25 +212,29 @@ module.exports = {
   },
   allRecord: (req, res) => {
     const username = req.query.username;
+    const startDate = req.query.startDate;
+    const endDate = req.query.endDate;
     try {
-      const calendarQuery = `DECLARE @startDate DATETIME, @endDate DATETIME;
-      SELECT @startDate = MIN(logintime), @endDate = MAX(logintime) FROM LoginRecord;
-      WITH DateRange AS (
-          SELECT @startDate AS Date
-          UNION ALL
-          SELECT DATEADD(DAY, 1, Date)
-          FROM DateRange
-          WHERE Date <= @endDate
-      )
-      
-      SELECT 
-          FORMAT(dr.Date, 'dd-MMM-yyyy') AS Date,
-          FORMAT(MIN(lr.logintime), 'hh:mm tt') AS LoginTime
-      FROM DateRange dr
-      LEFT JOIN LoginRecord lr ON FORMAT(lr.logintime, 'dd-MMM-yyyy') = FORMAT(dr.Date, 'dd-MMM-yyyy')
-          AND lr.username = '${username}'
-      GROUP BY dr.Date
-      OPTION (MAXRECURSION 0);`;
+      const calendarQuery = `DECLARE @startDate DATETIME, @endDate DATETIME
+      SET @startDate = '${startDate}'
+      SET @endDate = '${endDate}';
+      --SET @endDate = DATEADD(DAY, -2, DATEADD(MONTH, 1, @startDate));
+            WITH DateRange AS (
+                SELECT @startDate AS Date
+                UNION ALL
+                SELECT DATEADD(DAY, 1, Date)
+                FROM DateRange
+                WHERE Date < @endDate
+            )
+            
+            SELECT 
+                FORMAT(dr.Date, 'dd-MMM-yyyy') AS Date,
+                FORMAT(MIN(lr.logintime), 'hh:mm tt') AS LoginTime
+            FROM DateRange dr
+            LEFT JOIN LoginRecord lr ON FORMAT(lr.logintime, 'dd-MMM-yyyy') = FORMAT(dr.Date, 'dd-MMM-yyyy')
+                AND lr.username = '${username}'
+            GROUP BY dr.Date
+            OPTION (MAXRECURSION 0);`;
       db.connect(config, function (error) {
         if (error) {
           console.log(error);
@@ -296,6 +300,35 @@ module.exports = {
       });
     } catch (error) {
       return res.status(500).json({ status: 'NOK', data: error, message: "Something went wrong. Please try again later" })
+    }
+  },
+  monthHoliday: (req, res) => {
+    const startDate = req.query.startDate;
+    const endDate = req.query.endDate;
+    try {
+      const fetchHolidayQuery = `SELECT 
+      FORMAT(Date, 'dd-MMM-yyyy') AS Date,
+      FORMAT(Date, 'dddd') AS Day,
+      HolidayName
+      from Holiday
+	  	  where Date BETWEEN '${startDate}' AND '${endDate}';`;
+      db.connect(config, function (error) {
+        if (error) {
+          console.log(error);
+          return res.status(500).json({ status: 'NOK', data: error, message: 'Database connection error' });
+        }
+        var request = new db.Request();
+        request.query(fetchHolidayQuery, (error, result) => {
+          if (error) {
+            return res.status(404).json({ status: 'Not Found', data: error, message: "Error fetching public holidays" })
+          }
+          else {
+            return res.status(200).json({ status: 'OK', data: result.recordset, message: "public holidays displayed" });
+          }
+        });
+      });
+    } catch (error) {
+      return res.status(500).json({ status: 'NOK', data: error, message: 'Internal server error' });
     }
   },
   fetchHoliday: (req, res) => {
@@ -387,12 +420,12 @@ module.exports = {
         //  WHERE SNo BETWEEN ${startRow} AND ${endRow}`;
 
         pendingQuery = `select 
-      	  	ROW_NUMBER() OVER (ORDER BY fromDate) AS SNo, id,
-        	EmpID, EmpName, 
-        	FORMAT(fromDate, 'dd-MMM-yyyy') AS fromDate,
-        	FORMAT(toDate, 'dd-MMM-yyyy') AS toDate,
-        	NoOfLeave, FullDay, FirstHalf, SecondHalf, Reason, RejectReason, Status
-        	from LeaveRecord order by id desc`;
+        ROW_NUMBER() OVER (ORDER BY fromDate desc) AS SNo,
+      EmpID, EmpName, 
+      FORMAT(fromDate, 'dd-MMM-yyyy') AS fromDate,
+      FORMAT(toDate, 'dd-MMM-yyyy') AS toDate,
+      NoOfLeave, FullDay, FirstHalf, SecondHalf, Reason, RejectReason, Status
+      from LeaveRecord`;
       } else if (userType == 2) {
         //		 pendingQuery = `
         //    SELECT * FROM (
@@ -1057,7 +1090,7 @@ module.exports = {
     try {
       const futureLeavesQuery = `SELECT u.empid, u.name
       FROM Users u
-      WHERE u.empid NOT IN (
+      WHERE isStatus=1 AND u.empid NOT IN (
         SELECT l.empid
         FROM LoginRecord l
         WHERE FORMAT(logintime, 'dd/MM/yyyy') = FORMAT(GETDATE(), 'dd/MM/yyyy')
@@ -1074,6 +1107,52 @@ module.exports = {
           }
           else {
             return res.status(200).json({ status: 'OK', data: result.recordset, message: "todays absentees displayed" });
+          }
+        });
+      });
+    } catch (error) {
+      return res.status(500).json({ status: 'NOK', data: error, message: 'Internal server error' });
+    }
+  },
+  Birthday: (req, res) => {
+    try {
+      const birthdayQuery = `
+      DECLARE @Today DATE = CAST(GETDATE() AS DATE);
+      DECLARE @EndDate DATE = DATEADD(DAY, 30, @Today);
+      
+      SELECT
+          name,
+        FORMAT(
+          CASE
+              WHEN DATEADD(YEAR, DATEDIFF(YEAR, birthday, @Today), birthday) >= @Today
+                   AND DATEADD(YEAR, DATEDIFF(YEAR, birthday, @Today), birthday) <= @EndDate
+              THEN DATEADD(YEAR, DATEDIFF(YEAR, birthday, @Today), birthday)
+              ELSE DATEADD(YEAR, DATEDIFF(YEAR, birthday, @Today) + 1, birthday)
+          END, 'dd-MMM-yyyy') AS UpcomingBirthday
+      FROM
+          Users
+      WHERE isStatus = 1 AND
+          CASE
+              WHEN DATEADD(YEAR, DATEDIFF(YEAR, birthday, @Today), birthday) >= @Today
+                   AND DATEADD(YEAR, DATEDIFF(YEAR, birthday, @Today), birthday) <= @EndDate
+              THEN DATEADD(YEAR, DATEDIFF(YEAR, birthday, @Today), birthday)
+              ELSE DATEADD(YEAR, DATEDIFF(YEAR, birthday, @Today) + 1, birthday)
+          END BETWEEN @Today AND @EndDate
+      ORDER BY
+          UpcomingBirthday;
+      `;
+      db.connect(config, function (error) {
+        if (error) {
+          console.log(error);
+          return res.status(500).json({ status: 'NOK', data: error, message: 'Database connection error' });
+        }
+        var request = new db.Request();
+        request.query(birthdayQuery, (error, result) => {
+          if (error) {
+            return res.status(404).json({ status: 'Not Found', data: error, message: "Error fetching upcoming birthdays" })
+          }
+          else {
+            return res.status(200).json({ status: 'OK', data: result.recordset, message: "upcoming birthdays displayed" });
           }
         });
       });
