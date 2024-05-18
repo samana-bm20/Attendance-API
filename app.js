@@ -49,10 +49,10 @@ app.use(bodyParser.json());
 const { checkInDB, insertInDB, recordOutTime, displayName,
     displayDesignation, displayEmpId, displayLoginTime, displayLogoutTime,
     allRecord, leaveRecord, monthHoliday, fetchHoliday, fetchLeave, 
-    pendingRecord, updateApprove, updateReject, monthlyRecord, 
-    monthlyEmployee, checkAllAbsent, addLeave, LateCount, employeeName, 
-    empIdName, onLeave, Birthday, employeeRecord, singleEmployee, deleteLeave, 
-    leavesUsed, empLeaves, futureLeaves, countDays, leaveCounts } = require('./files/index')
+    pendingRecord, updateApprove, updateReject, monthlyRecord, monthlyEmployee, 
+    checkAllAbsent, addLeave, LateCount, employeeName, empIdName, 
+    onLeave, Birthday, employeeRecord, singleEmployee, deleteLeave, leavesUsed, 
+    empLeaves, futureLeaves, countDays, leaveCounts, changePassword} = require('./files/index')
 
 app.get('/login', checkInDB);
 app.post('/record', insertInDB);
@@ -87,6 +87,7 @@ app.get('/todayleave', onLeave);
 app.get('/bday', Birthday);
 app.get('/countdays', countDays);
 app.get('/count', leaveCounts);
+app.put('/password', changePassword);
 
 app.use(express.static('public'));
 

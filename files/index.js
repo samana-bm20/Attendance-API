@@ -233,6 +233,9 @@ module.exports = {
             FROM DateRange dr
             LEFT JOIN LoginRecord lr ON FORMAT(lr.logintime, 'dd-MMM-yyyy') = FORMAT(dr.Date, 'dd-MMM-yyyy')
                 AND lr.username = '${username}'
+				where dr.Date> (
+				select min(lr.logintime) from LoginRecord lr where lr.username = '${username}'
+				)
             GROUP BY dr.Date
             OPTION (MAXRECURSION 0);`;
       db.connect(config, function (error) {
@@ -361,7 +364,7 @@ module.exports = {
     const empname = req.query.empname;
     try {
       const fetchLeaveQuery = `select 
-      ROW_NUMBER() OVER (ORDER BY fromDate) AS SNo,
+      ROW_NUMBER() OVER (ORDER BY fromDate) AS SNo, id,
       EmpID, EmpName, 
       FORMAT(FromDate, 'dd-MMM-yyyy') AS FromDate,
       FORMAT(ToDate, 'dd-MMM-yyyy') AS ToDate,
@@ -420,7 +423,7 @@ module.exports = {
         //  WHERE SNo BETWEEN ${startRow} AND ${endRow}`;
 
         pendingQuery = `select 
-        ROW_NUMBER() OVER (ORDER BY fromDate desc) AS SNo,
+        ROW_NUMBER() OVER (ORDER BY fromDate desc) AS SNo, id,
       EmpID, EmpName, 
       FORMAT(fromDate, 'dd-MMM-yyyy') AS fromDate,
       FORMAT(toDate, 'dd-MMM-yyyy') AS toDate,
@@ -1088,13 +1091,10 @@ module.exports = {
   onLeave: (req, res) => {
     const empid = req.query.empid;
     try {
-      const futureLeavesQuery = `SELECT u.empid, u.name
-      FROM Users u
-      WHERE isStatus=1 AND u.empid NOT IN (
-        SELECT l.empid
-        FROM LoginRecord l
-        WHERE FORMAT(logintime, 'dd/MM/yyyy') = FORMAT(GETDATE(), 'dd/MM/yyyy')
-      );`;
+      const futureLeavesQuery = `Select EmpID, EmpName 
+      from LeaveRecord 
+      where  Status = 'Approved' AND
+      CAST(GETDATE() AS DATE) BETWEEN FromDate AND ToDate;`;
       db.connect(config, function (error) {
         if (error) {
           console.log(error);
@@ -1169,7 +1169,7 @@ module.exports = {
       -- Calculate the number of distinct working days (days with login records) in the current month
       DECLARE @WorkingDays INT = (
           SELECT COUNT(DISTINCT CAST(logintime AS DATE))
-          FROM [DGIS_Latest].[dbo].[LoginRecord]
+          FROM LoginRecord
           WHERE FORMAT(logintime, 'yyyy-MM') = FORMAT(GETDATE(), 'yyyy-MM')
       );
       
@@ -1190,7 +1190,7 @@ module.exports = {
               SUM( CASE WHEN FORMAT(logintime ,'hh:mm') > '09:00' THEN 1 ELSE 0 END   ) AS Late
           FROM(
             SELECT MIN(logintime) logintime
-            FROM [DGIS_Latest].[dbo].[LoginRecord]
+            FROM LoginRecord
             WHERE FORMAT(logintime, 'yyyy-MM') = FORMAT(GETDATE(), 'yyyy-MM')
               AND empid = '${empid}'
               GROUP BY CAST(LOGINTIME AS DATE)
@@ -1234,6 +1234,32 @@ module.exports = {
           }
           else {
             return res.status(200).json({ status: 'OK', data: result.recordset, message: "todays leave count displayed" });
+          }
+        });
+      });
+    } catch (error) {
+      return res.status(500).json({ status: 'NOK', data: error, message: 'Internal server error' });
+    }
+  },
+  changePassword: (req, res) => {
+    const EmpID = req.body.EmpID;
+    const Password = req.body.Password;
+    try {
+      const passwordQuery = `UPDATE Users
+      set password = '${Password}'
+      where empid = '${EmpID}';`;
+      db.connect(config, function (error) {
+        if (error) {
+          console.log(error);
+          return res.status(500).json({ status: 'NOK', data: error, message: 'Database connection error' });
+        }
+        var request = new db.Request();
+        request.query(passwordQuery, (error, result) => {
+          if (error) {
+            return res.status(404).json({ status: 'Not Found', data: error, message: "Error updating new password" })
+          }
+          else {
+            return res.status(200).json({ status: 'OK', data: result.recordset, message: "New password updated" });
           }
         });
       });
