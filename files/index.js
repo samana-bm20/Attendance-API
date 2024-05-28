@@ -1215,6 +1215,63 @@ module.exports = {
       return res.status(500).json({ status: 'NOK', data: error, message: 'Internal server error' });
     }
   },
+  Monthwise: (req, res) => {
+    const viewdate = req.query.viewdate;
+    const empid = req.query.empid;
+    try {
+      const countQuery = `-- Calculate total days in the current month
+      DECLARE @TotalDaysInMonth INT = 30;
+	  DECLARE @CurrentMonthStart DATE = '${viewdate}';
+      
+      -- Calculate the number of distinct working days (days with login records) in the current month
+      DECLARE @WorkingDays INT = (
+          SELECT COUNT(DISTINCT CAST(logintime AS DATE))
+          FROM LoginRecord
+          WHERE FORMAT(logintime, 'yyyy-MM') = FORMAT(@CurrentMonthStart, 'yyyy-MM')
+      );
+      
+      -- Calculate total off days (absent days) in the current month
+      DECLARE @TotalOff INT = @TotalDaysInMonth - @WorkingDays;
+      
+      -- Display the results
+      SELECT
+          @TotalDaysInMonth AS TotalDays,
+          @WorkingDays AS WorkingDays,
+          @TotalOff AS TotalOff,
+          @WorkingDays-(Present) AS Absent,
+          Present,
+        Late
+      FROM (
+          SELECT
+              COUNT(logintime) AS Present,
+              SUM( CASE WHEN FORMAT(logintime ,'hh:mm') > '09:00' THEN 1 ELSE 0 END   ) AS Late
+          FROM(
+            SELECT MIN(logintime) logintime
+            FROM LoginRecord
+            WHERE FORMAT(logintime, 'yyyy-MM') = FORMAT(@CurrentMonthStart, 'yyyy-MM')
+              AND empid = '${empid}'
+              GROUP BY CAST(LOGINTIME AS DATE)
+          )IT
+      ) AS T;`;
+      db.connect(config, function (error) {
+        if (error) {
+          console.log(error);
+          return res.status(500).json({ status: 'NOK', data: error, message: 'Database connection error' });
+        }
+        var request = new db.Request();
+        request.query(countQuery, (error, result) => {
+          if (error) {
+            return res.status(404).json({ status: 'Not Found', data: error, message: "Error fetching counts" })
+          }
+          else {
+            return res.status(200).json({ status: 'OK', data: result.recordset, message: "todays counts displayed" });
+          }
+        });
+      });
+    } catch (error) {
+      return res.status(500).json({ status: 'NOK', data: error, message: 'Internal server error' });
+    }
+  },
   leaveCounts: (req, res) => {
     const empid = req.query.empid;
     try {
