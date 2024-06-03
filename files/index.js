@@ -261,51 +261,7 @@ module.exports = {
       return res.status(500).json({ status: 'NOK', data: error, message: 'Internal server error' });
     }
   },
-  leaveRecord: (req, res) => {
-    const empID = req.body.empID;
-    const name = req.body.name;
-    const fromDateRAW = new Date(req.body.fromDate);
-    const toDateRAW = new Date(req.body.toDate);
-    const totalLeave = req.body.totalLeave;
-    const fullDay = req.body.fullDay;
-    const firstHalf = req.body.firstHalf;
-    const secondHalf = req.body.secondHalf;
-    const reason = req.body.reason;
-
-    const fromDate = fromDateRAW.toLocaleDateString('en-GB', {
-      day: '2-digit',
-      month: 'short',
-      year: 'numeric'
-    }).replace(/ /g, '-');
-
-    const toDate = toDateRAW.toLocaleDateString('en-GB', {
-      day: '2-digit',
-      month: 'short',
-      year: 'numeric'
-    }).replace(/ /g, '-');
-
-    try {
-      let leaveQuery = `INSERT INTO LeaveRecord 
-      (EmpID, EmpName, FromDate, ToDate, NoOfLeave, FullDay, FirstHalf, SecondHalf, Reason) 
-      VALUES ('${empID}', '${name}', '${fromDate}', '${toDate}', '${totalLeave}', 
-      '${fullDay}', '${firstHalf}', '${secondHalf}', '${reason}');`;
-      db.connect(config, function (error) {
-        if (error)
-          console.log(error);
-        var request = new db.Request();
-        request.query(leaveQuery, (error, result) => {
-          if (error) {
-            return res.status(404).json({ status: 'Not Found', data: error, message: "Error in inserting data" })
-          } else {
-            return res.status(200).json({ status: 'OK', data: result.recordset, message: "Leave request recorded successfully" })
-          }
-        });
-      });
-    } catch (error) {
-      return res.status(500).json({ status: 'NOK', data: error, message: "Something went wrong. Please try again later" })
-    }
-  },
-  monthHoliday: (req, res) => {
+monthHoliday: (req, res) => {
     const startDate = req.query.startDate;
     const endDate = req.query.endDate;
     try {
@@ -362,6 +318,8 @@ module.exports = {
   },
   fetchLeave: (req, res) => {
     const empname = req.query.empname;
+    const startDate = req.query.startDate;
+    const endDate = req.query.endDate;
     try {
       const fetchLeaveQuery = `select 
       ROW_NUMBER() OVER (ORDER BY fromDate) AS SNo, id,
@@ -370,7 +328,11 @@ module.exports = {
       FORMAT(ToDate, 'dd-MMM-yyyy') AS ToDate,
       NoOfLeave, FullDay, FirstHalf, SecondHalf, 
       Reason, Status, RejectReason
-      from LeaveRecord where EmpName = '${empname}';`;
+      from LeaveRecord where EmpName = '${empname}'
+      AND (
+        (FromDate BETWEEN '${startDate}' AND '${endDate}')
+        OR (ToDate BETWEEN '${startDate}' AND '${endDate}')
+      );`;
       db.connect(config, function (error) {
         if (error) {
           console.log(error);
@@ -615,12 +577,22 @@ module.exports = {
     const fromDate = req.query.fromDate;
     const toDate = req.query.toDate;
     const relaxationTime = req.query.relaxationTime;
+      // query = SELECT DISTINCT logintime AS DaysWithLateLogin
+      // FROM LoginRecord lr
+      // WHERE lr.empid='ML08' AND 
+      //  CAST(logintime AS TIME) > DATEADD(MINUTE, 0, CONVERT(TIME, '09:00:00'))
+      //  AND CAST(logintime AS DATE) BETWEEN '2024-05-01' AND '2024-05-19';
     try {
-      const lateCountQuery = `SELECT COUNT(DISTINCT logintime) AS DaysWithLateLogin
-      FROM LoginRecord lr
-      WHERE lr.empid='${empID}' AND 
-       CAST(logintime AS TIME) >= DATEADD(MINUTE, ${relaxationTime}, CONVERT(TIME, '09:00:00'))
-       AND CAST(logintime AS DATE) BETWEEN '${fromDate}' AND '${toDate}';`;
+      const lateCountQuery = `SELECT COUNT(logintime) AS DaysWithLateLogin
+      FROM (
+          SELECT MIN(logintime) AS logintime
+          FROM LoginRecord
+          WHERE empid = '${empID}'
+            AND CAST(logintime AS DATE) BETWEEN '${fromDate}' AND '${toDate}'
+          GROUP BY CAST(logintime AS DATE)
+      ) AS DailyLogins
+      WHERE CAST(logintime AS TIME) >= DATEADD(MINUTE, ${relaxationTime}, CONVERT(TIME, '09:00:00'))
+      `;
       db.connect(config, function (error) {
         if (error) {
           console.log(error);
@@ -638,6 +610,50 @@ module.exports = {
       });
     } catch (error) {
       return res.status(500).json({ status: 'NOK', data: error, message: 'Internal server error' });
+    }
+  },
+  leaveRecord: (req, res) => {
+    const empID = req.body.empID;
+    const name = req.body.name;
+    const fromDateRAW = new Date(req.body.fromDate);
+    const toDateRAW = new Date(req.body.toDate);
+    const totalLeave = req.body.totalLeave;
+    const fullDay = req.body.fullDay;
+    const firstHalf = req.body.firstHalf;
+    const secondHalf = req.body.secondHalf;
+    const reason = req.body.reason;
+
+    const fromDate = fromDateRAW.toLocaleDateString('en-GB', {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric'
+    }).replace(/ /g, '-');
+
+    const toDate = toDateRAW.toLocaleDateString('en-GB', {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric'
+    }).replace(/ /g, '-');
+
+    try {
+      let leaveQuery = `INSERT INTO LeaveRecord 
+      (EmpID, EmpName, FromDate, ToDate, NoOfLeave, FullDay, FirstHalf, SecondHalf, Reason) 
+      VALUES ('${empID}', '${name}', '${fromDate}', '${toDate}', '${totalLeave}', 
+      '${fullDay}', '${firstHalf}', '${secondHalf}', '${reason}');`;
+      db.connect(config, function (error) {
+        if (error)
+          console.log(error);
+        var request = new db.Request();
+        request.query(leaveQuery, (error, result) => {
+          if (error) {
+            return res.status(404).json({ status: 'Not Found', data: error, message: "Error in inserting data" })
+          } else {
+            return res.status(200).json({ status: 'OK', data: result.recordset, message: "Leave request recorded successfully" })
+          }
+        });
+      });
+    } catch (error) {
+      return res.status(500).json({ status: 'NOK', data: error, message: "Something went wrong. Please try again later" })
     }
   },
   monthlyRecord: (req, res) => {
@@ -1240,7 +1256,7 @@ module.exports = {
           @TotalOff AS TotalOff,
           @WorkingDays-(Present) AS Absent,
           Present,
-        Late
+          COALESCE(Late, 0) AS Late
       FROM (
           SELECT
               COUNT(logintime) AS Present,
@@ -1325,4 +1341,3 @@ module.exports = {
     }
   },
 }
-
