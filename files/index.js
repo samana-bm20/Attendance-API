@@ -1155,7 +1155,7 @@ monthHoliday: (req, res) => {
               ELSE DATEADD(YEAR, DATEDIFF(YEAR, birthday, @Today) + 1, birthday)
           END BETWEEN @Today AND @EndDate
       ORDER BY
-          UpcomingBirthday;
+          UpcomingBirthday desc;
       `;
       db.connect(config, function (error) {
         if (error) {
