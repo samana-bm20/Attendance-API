@@ -1826,7 +1826,69 @@ VALUES
   insertODLogin: (req, res) => {
     const id = req.body.Id;
     try {
-      const ODLoginQuery = ` EXEC InsertOfficialDuty @id = ${id}`;
+      const ODLoginQuery = `
+       DECLARE @startDate DATE;
+       DECLARE @endDate DATE;
+       DECLARE @empid NVARCHAR(50);
+       DECLARE @username NVARCHAR(50);
+       DECLARE @fullName NVARCHAR(100);
+	     DECLARE @morning NVARCHAR(100);
+	     DECLARE @evening NVARCHAR(100);
+
+    SELECT 
+    @empid = od.empid, 
+    @username = u.username, 
+    @fullName = od.empName, 
+    @startDate = od.FromDate, 
+    @endDate = od.ToDate,
+    @morning = od.FirstHalf,
+    @evening = od.SecondHalf
+    FROM OfficialDuty od
+    JOIN Users u ON od.empid = u.empid
+    WHERE od.ID = '${id}';
+
+    IF @startDate IS NOT NULL AND @endDate IS NOT NULL
+    BEGIN
+        WHILE @startDate <= @endDate
+        BEGIN
+            DECLARE @logintime DATETIME = CAST(CONVERT(varchar, @startDate, 23) + ' 09:00:00' AS DATETIME);
+            DECLARE @logouttime DATETIME = CAST(CONVERT(varchar, @startDate, 23) + ' 17:30:00' AS DATETIME);
+              
+            -- Check if logintime already exists
+            IF EXISTS (SELECT 1 FROM LoginRecord WHERE username = @username AND CONVERT(DATE, logintime) = @startDate)
+            BEGIN
+                --Update logintime to 9:00am
+                IF @morning = '1' AND @evening = '0'
+				BEGIN
+                    UPDATE LoginRecord
+                    SET logintime = @logintime
+                    WHERE username = @username AND CONVERT(DATE, logintime) = @startDate;
+                END
+                ELSE IF @morning = '0' AND @evening = '1'
+                BEGIN
+                    -- Update logouttime to 5:30pm of logintime date
+                    UPDATE LoginRecord
+                    SET logoutTime = @logouttime
+                    WHERE username = @username AND CONVERT(DATE, logintime) = @startDate;
+                END
+				ELSE IF @morning = '0' AND @evening = '0'
+                BEGIN
+                    -- Update logintime and logouttime for the date
+                    UPDATE LoginRecord
+                    SET logintime = @logintime, logoutTime = @logouttime
+                    WHERE username = @username AND CONVERT(DATE, logintime) = @startDate;
+                END
+            END
+            ELSE
+            BEGIN
+                -- Insert new record if logintime does not exist
+                INSERT INTO LoginRecord (username, logintime, fullName, logoutTime, empid)
+                VALUES (@username, @logintime, @fullName, @logouttime, @empid);
+            END
+              
+            SET @startDate = DATEADD(DAY, 1, @startDate);
+        END
+    END`;
       db.connect(config, function (error) {
         if (error) {
           console.log(error);
