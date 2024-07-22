@@ -1,6 +1,8 @@
 const db = global.db;
 const config = global.config;
-const bcrypt = require('bcrypt');
+const bcrypt = global.bcrypt;
+const path = global.path;
+const fs = global.fs;
 const saltRounds = 6;
 
 module.exports = {
@@ -211,6 +213,7 @@ module.exports = {
     const designation = req.body.designation.trim();
     const empid = req.body.empid.trim();
     const birthday = new Date(req.body.birthday);
+    const paidLeave = req.body.paidLeave;
     const fromDate = birthday.toLocaleDateString('en-GB', {
       day: '2-digit',
       month: 'short',
@@ -250,7 +253,14 @@ module.exports = {
                       return res.status(200).json({ status: 'NOK', data: result.recordset, message: "Employee Id already exists" });
                     }
                     else {
-                      const addleaveQuery = `INSERT INTO [dbo].[Users] ([username] ,[password] ,[name] ,[designation] ,[empid] ,[userType] ,[isStatus] ,[birthday]) VALUES ('${username}' ,'${hashedPassword}' ,'${name}' ,'${designation}' ,'${empid}' ,2,1,'${fromDate}')`;
+                      const addleaveQuery = `INSERT INTO [dbo].[Users] 
+                      ([username] ,[password] ,[name] ,
+                      [designation] ,[empid] ,[userType] ,
+                      [isStatus] ,[birthday], [PaidLeave]) 
+                      VALUES 
+                      ('${username}' ,'${hashedPassword}' ,
+                      '${name}' ,'${designation}' ,
+                      '${empid}' ,2,1,'${fromDate}', ${paidLeave})`;
                       db.connect(config, function (error) {
                         if (error) {
                           console.log(error);
@@ -283,10 +293,11 @@ module.exports = {
   UpdateRegister: async (req, res) => {
     const uid = req.body.uid;
     const password = req.body.password.trim();
-    const name = req.body.name.trim();
+    const username = req.body.username.trim();
     const designation = req.body.designation.trim();
     const statusEmploy = req.body.statusEmploy;
     const birthday = new Date(req.body.birthday);
+    const paidLeave = req.body.paidLeave;
     const fromDate = birthday.toLocaleDateString('en-GB', {
       day: '2-digit',
       month: 'short',
@@ -294,8 +305,15 @@ module.exports = {
     }).replace(/ /g, '-');
 
     try {
-      const hashedPassword = await bcrypt.hash(password, saltRounds);
-      const updateUserQuery = `UPDATE [dbo].[Users] SET [password] = '${hashedPassword}', [name] = '${name}', [designation] = '${designation}', [isStatus] = LTRIM(RTRIM('${statusEmploy}')), [birthday] = '${fromDate}' WHERE [uid] = '${uid}'`;
+      // const hashedPassword = await bcrypt.hash(password, saltRounds);
+      const updateUserQuery = `UPDATE [dbo].[Users] 
+      SET [password] = '${password}', 
+      [username] = '${username}', 
+      [designation] = '${designation}', 
+      [isStatus] = LTRIM(RTRIM('${statusEmploy}')), 
+      [birthday] = '${fromDate}',
+      [PaidLeave] = ${paidLeave} 
+      WHERE [uid] = '${uid}'`;
       db.connect(config, function (error) {
         if (error) {
           console.log(error);
@@ -319,7 +337,9 @@ module.exports = {
     const userType = req.body.userType;
     const uid = req.body.uid;
     try {
-      const roleChangeQuery = `UPDATE [dbo].[Users] SET [userType] = '${userType}' WHERE [uid] = '${uid}'`;
+      const roleChangeQuery = `UPDATE [dbo].[Users] 
+      SET [userType] = '${userType}' 
+      WHERE [uid] = '${uid}'`;
       db.connect(config, function (error) {
         if (error) {
           console.log(error);
@@ -341,7 +361,7 @@ module.exports = {
   },
   FetchEmployee: (req, res) => {
     try {
-      let fetchEmpQuery = `SELECT ROW_NUMBER() OVER (ORDER BY birthday) AS SNo, uid
+      let fetchEmpQuery = `SELECT ROW_NUMBER() OVER (ORDER BY isStatus DESC, empid ASC) AS SNo, uid
       ,username
       ,password
       ,name
@@ -350,6 +370,7 @@ module.exports = {
       ,userType
       ,isStatus
       ,FORMAT(birthday, 'dd-MMM-yyyy') AS birthday
+      ,PaidLeave
       FROM Users`;
       db.connect(config, function (error) {
         if (error) {
@@ -425,61 +446,17 @@ module.exports = {
       return res.status(500).json({ status: 'NOK', data: error, message: 'Internal server error' });
     }
   },
-  leaveRecord: (req, res) => {
-    const empID = req.body.empID;
-    const name = req.body.name;
-    const fromDateRAW = new Date(req.body.fromDate);
-    const toDateRAW = new Date(req.body.toDate);
-    const totalLeave = req.body.totalLeave;
-    const fullDay = req.body.fullDay;
-    const firstHalf = req.body.firstHalf;
-    const secondHalf = req.body.secondHalf;
-    const reason = req.body.reason;
-
-    const fromDate = fromDateRAW.toLocaleDateString('en-GB', {
-      day: '2-digit',
-      month: 'short',
-      year: 'numeric'
-    }).replace(/ /g, '-');
-
-    const toDate = toDateRAW.toLocaleDateString('en-GB', {
-      day: '2-digit',
-      month: 'short',
-      year: 'numeric'
-    }).replace(/ /g, '-');
-
-    try {
-      let leaveQuery = `INSERT INTO LeaveRecord 
-      (EmpID, EmpName, FromDate, ToDate, NoOfLeave, FullDay, FirstHalf, SecondHalf, Reason) 
-      VALUES ('${empID}', '${name}', '${fromDate}', '${toDate}', '${totalLeave}', 
-      '${fullDay}', '${firstHalf}', '${secondHalf}', '${reason}');`;
-      db.connect(config, function (error) {
-        if (error)
-          console.log(error);
-        var request = new db.Request();
-        request.query(leaveQuery, (error, result) => {
-          if (error) {
-            return res.status(404).json({ status: 'Not Found', data: error, message: "Error in inserting data" })
-          } else {
-            return res.status(200).json({ status: 'OK', data: result.recordset, message: "Leave request recorded successfully" })
-          }
-        });
-      });
-    } catch (error) {
-      return res.status(500).json({ status: 'NOK', data: error, message: "Something went wrong. Please try again later" })
-    }
-  },
   fetchLeave: (req, res) => {
     const empname = req.query.empname;
     const startDate = req.query.startDate;
     const endDate = req.query.endDate;
     try {
       const fetchLeaveQuery = `select 
-      ROW_NUMBER() OVER (ORDER BY fromDate) AS SNo, id,
+      ROW_NUMBER() OVER (ORDER BY id) AS SNo, id,
       EmpID, EmpName, 
       FORMAT(FromDate, 'dd-MMM-yyyy') AS FromDate,
       FORMAT(ToDate, 'dd-MMM-yyyy') AS ToDate,
-      NoOfLeave, FullDay, FirstHalf, SecondHalf, 
+      NoOfLeave, FirstHalf, SecondHalf, 
       Reason, Status, Remarks
       from LeaveRecord where EmpName = '${empname}'
       AND (
@@ -518,15 +495,35 @@ module.exports = {
 
       if (userType == 1) {
         pendingQuery = `select 
-        ROW_NUMBER() OVER (ORDER BY fromDate desc) AS SNo, id,
+        ROW_NUMBER() OVER (
+        ORDER BY 
+            CASE 
+                WHEN Status = 'Pending' THEN id 
+                ELSE NULL 
+            END DESC,
+            CASE 
+                WHEN Status <> 'Pending' THEN fromDate 
+                ELSE NULL 
+            END DESC
+    ) AS SNo, id,
       EmpID, EmpName, 
       FORMAT(fromDate, 'dd-MMM-yyyy') AS fromDate,
       FORMAT(toDate, 'dd-MMM-yyyy') AS toDate,
-      NoOfLeave, FullDay, FirstHalf, SecondHalf, Reason, Remarks, Status
+      NoOfLeave, FirstHalf, SecondHalf, Reason, Remarks, Status
       from LeaveRecord`;
-      } else if (userType == 2) {
+      } else if (userType == 2 || userType == 3) {
         pendingQuery = `select 
-        ROW_NUMBER() OVER (ORDER BY fromDate desc) AS SNo, id,
+        ROW_NUMBER() OVER (
+        ORDER BY 
+            CASE 
+                WHEN Status = 'Pending' THEN id 
+                ELSE NULL 
+            END DESC,
+            CASE 
+                WHEN Status <> 'Pending' THEN fromDate 
+                ELSE NULL 
+            END DESC
+    ) AS SNo, id,
         EmpID, EmpName, 
         FORMAT(fromDate, 'dd-MMM-yyyy') AS fromDate,
         FORMAT(toDate, 'dd-MMM-yyyy') AS toDate,
@@ -558,11 +555,21 @@ module.exports = {
 
     try {
       let eachEmpLeavesQuery = `select 
-        ROW_NUMBER() OVER (ORDER BY fromDate desc) AS SNo, id,
+        ROW_NUMBER() OVER (
+        ORDER BY 
+            CASE 
+                WHEN Status = 'Pending' THEN id 
+                ELSE NULL 
+            END DESC,
+            CASE 
+                WHEN Status <> 'Pending' THEN fromDate 
+                ELSE NULL 
+            END DESC
+    ) AS SNo, id,
       EmpID, EmpName, 
       FORMAT(fromDate, 'dd-MMM-yyyy') AS fromDate,
       FORMAT(toDate, 'dd-MMM-yyyy') AS toDate,
-      NoOfLeave, FullDay, FirstHalf, SecondHalf, Reason, Remarks, Status
+      NoOfLeave, FirstHalf, SecondHalf, Reason, Remarks, Status
       from LeaveRecord where EmpID = '${empid}'`;
       db.connect(config, function (error) {
         if (error) {
@@ -609,7 +616,7 @@ module.exports = {
       return res.status(500).json({ status: 'NOK', data: error, message: 'Internal server error' });
     }
   },
-  updateReject: (req, res) => {
+  updateRejectPullback: (req, res) => {
     const rejectedCancel = req.body.rejectedCancel;
     const Id = req.body.Id;
     const rejectReason = req.body.rejectReason;
@@ -629,6 +636,29 @@ module.exports = {
           }
           else {
             return res.status(200).json({ status: 'OK', data: result.recordset, message: "Rejected status updated" });
+          }
+        });
+      });
+    } catch (error) {
+      return res.status(500).json({ status: 'NOK', data: error, message: 'Internal server error' });
+    }
+  },
+  deleteApproved: (req, res) => {
+    const { Id } = req.body;
+    try {
+      const deleteQuery = `DELETE FROM LeaveRecord where id = '${Id}'`;
+      db.connect(config, function (error) {
+        if (error) {
+          console.log(error);
+          return res.status(500).json({ status: 'NOK', data: error, message: 'Database connection error' });
+        }
+        var request = new db.Request();
+        request.query(deleteQuery, (error, result) => {
+          if (error) {
+            return res.status(404).json({ status: 'Not Found', data: error, message: "Error deleting record" })
+          }
+          else {
+            return res.status(200).json({ status: 'OK', data: result.recordset, message: "Record deleted successfully" });
           }
         });
       });
@@ -673,30 +703,50 @@ module.exports = {
         firstHalf = 0;
       }
 
-      const addleaveQuery = `INSERT INTO [dbo].[LeaveRecord]
-      ([EmpID]
-      ,[EmpName]
-      ,[FromDate]
-      ,[ToDate]
-      ,[NoOfLeave]
-      ,[FullDay]
-      ,[FirstHalf]
-      ,[SecondHalf]
-      ,[Reason]
-      ,[Status]
-      ,[Remarks]) 
-      VALUES
-      ('${EmpID}'
-      ,'${empName}'
-      ,'${fromDate}'
-      ,'${toDate}'
-      ,'${NoOfLeave}'
-      ,'0'
-      ,'${firstHalf}'
-      ,'${secondHalf}'
-      ,'${reason}'
-      ,'${status}'
-      ,'${remark}')`;
+      const addleaveQuery = `
+      DECLARE @EmpID VARCHAR(255) = '${EmpID}';
+      DECLARE @EmpName VARCHAR(255) = '${empName}';
+      DECLARE @FromDate DATE = '${fromDate}';
+      DECLARE @ToDate DATE = '${toDate}';
+      DECLARE @NoOfLeave FLOAT = ${NoOfLeave};
+      DECLARE @FirstHalf INT = ${firstHalf};
+      DECLARE @SecondHalf INT = ${secondHalf};
+      DECLARE @Reason NVARCHAR(255) = '${reason}';
+      DECLARE @Status VARCHAR(255) = '${status}';
+      DECLARE @Remarks VARCHAR(255) = '${remark}';
+
+      DECLARE @HolidayCount INT;
+
+      SET @HolidayCount = (
+          SELECT COUNT(*)
+        FROM Holiday
+        WHERE Date BETWEEN @FromDate AND @ToDate
+      );
+
+      SET @NoOfLeave = @NoOfLeave - @HolidayCount;
+
+      INSERT INTO [dbo].[LeaveRecord]
+            ([EmpID]
+            ,[EmpName]
+            ,[FromDate]
+            ,[ToDate]
+            ,[NoOfLeave]
+            ,[FirstHalf]
+            ,[SecondHalf]
+            ,[Reason]
+            ,[Status]
+            ,[Remarks]) 
+            VALUES
+            (@EmpID
+            ,@EmpName
+            ,@FromDate
+            ,@ToDate
+            ,@NoOfLeave
+            ,@FirstHalf
+            ,@SecondHalf
+            ,@Reason
+            ,@Status
+            ,@Remarks)`;
       db.connect(config, function (error) {
         if (error) {
           console.log(error);
@@ -888,7 +938,7 @@ module.exports = {
   },
   empIdName: (req, res) => {
     try {
-      const empIdNameQuery = `SELECT empid, name FROM Users;`;
+      const empIdNameQuery = `SELECT empid, name FROM Users WHERE isStatus = 1 ORDER BY empid;`;
       db.connect(config, function (error) {
         if (error) {
           console.log(error);
@@ -912,52 +962,7 @@ module.exports = {
     const month = req.query.month;
     const year = req.query.year;
     try {
-      const employeeQuery = `DECLARE @month int, @year int, @lastDay int
-      set @month = '${month}'
-      set @year =  '${year}'
-
-      -- calculations
-      DECLARE @startDate datetime, @endDate datetime
-      SET @startDate = convert(varchar, @year) + '-' + convert(varchar, @month) + '-1'
-      set @endDate = CASE WHEN @month = MONTH(GETDATE())
-          THEN GETDATE()
-          ELSE DATEADD(s,-1,DATEADD(mm, DATEDIFF(m,0,@startDate)+1,0))
-          END
-      set @lastDay =  day(@endDate) --last day of month
-
-      declare @day int
-      set @day = @lastDay
-
-      declare @days varchar(max)
-      declare @CurrentDate datetime  
-      set @days = '[' + CONVERT(varchar(10), @endDate, 23) + ' (' + DATENAME(weekday, @endDate) + ')]';
-      set @CurrentDate=@endDate;
-      WHILE (@day > 1)
-      BEGIN
-          set @CurrentDate=DATEADD(d,-1,@CurrentDate );
-          set @days = @days + ',['+CONVERT(varchar(10),@CurrentDate,23) +' ('+DATENAME(weekday,@CurrentDate)+')]'
-          set @day = @day - 1
-      END
-    declare @query varchar(max)
-      set @query = 'SELECT *
-      FROM
-      (
-        SELECT 
-        fullName AS EmployeeName,
-        CONVERT(varchar(10), logintime,23) +'' (''+ DATENAME(weekday,logintime)+'')'' as AttendanceDate,
-        CONVERT(VARCHAR(32),MIN(CAST(logintime AS TIME)), 100) AS AttendanceTime
-        FROM LoginRecord
-          WHERE MONTH(logintime) = ' + CONVERT(VARCHAR,@month) + '
-          AND YEAR(logintime) = ' + CONVERT(VARCHAR,@year) + '
-        GROUP BY fullName, CONVERT(varchar(10), logintime,23) +'' (''+ DATENAME(weekday,logintime)+'')''
-      )SRC
-      PIVOT
-      (
-        MAX(AttendanceTime)
-        FOR ATTENDANCEDATE IN ('+@days+')
-      )AS PVT'
-  exec(@query); 
-      `;
+      const employeeQuery = `EXEC GetMonthlyAttendanceReport @month = '${month}', @year = '${year}'`;
       db.connect(config, function (error) {
         if (error) {
           console.log(error);
@@ -982,54 +987,7 @@ module.exports = {
     const year = req.query.year;
     const empid = req.query.empid;
     try {
-      const employeeQuery = `DECLARE @month int, @year int, @lastDay int, @empid varchar(100)
-      set @month = '${month}'
-      set @year =  '${year}'
-      set @empid =  '${empid}'
-
-      -- calculations
-      DECLARE @startDate datetime, @endDate datetime
-      SET @startDate = convert(varchar, @year) + '-' + convert(varchar, @month) + '-1'
-      set @endDate = CASE WHEN @month = MONTH(GETDATE())
-          THEN GETDATE()
-          ELSE DATEADD(s,-1,DATEADD(mm, DATEDIFF(m,0,@startDate)+1,0))
-          END
-      set @lastDay =  day(@endDate) --last day of month
-
-      declare @day int
-      set @day = @lastDay
-
-      declare @days varchar(max)
-      declare @CurrentDate datetime  
-      set @days = '[' + CONVERT(varchar(10), @endDate, 23) + ' (' + DATENAME(weekday, @endDate) + ')]';
-      set @CurrentDate=@endDate;
-      WHILE (@day > 1)
-      BEGIN
-          set @CurrentDate=DATEADD(d,-1,@CurrentDate );
-          set @days = @days + ',['+CONVERT(varchar(10),@CurrentDate,23) +' ('+DATENAME(weekday,@CurrentDate)+')]'
-          set @day = @day - 1
-      END
-    declare @query varchar(max)
-      set @query = 'SELECT *
-      FROM
-      (
-        SELECT 
-        fullName AS EmployeeName,
-        CONVERT(varchar(10), logintime,23) +'' (''+ DATENAME(weekday,logintime)+'')'' as AttendanceDate,
-        CONVERT(VARCHAR(32),MIN(CAST(logintime AS TIME)), 100) AS AttendanceTime
-        FROM LoginRecord
-          WHERE MONTH(logintime) = ' + CONVERT(VARCHAR,@month) + '
-          AND YEAR(logintime) = ' + CONVERT(VARCHAR,@year) + '
-          AND empid = ''' + @empid + '''
-          GROUP BY fullName, CONVERT(varchar(10), logintime,23) +'' (''+ DATENAME(weekday,logintime)+'')''
-      )SRC
-      PIVOT
-      (
-        MAX(AttendanceTime)
-        FOR ATTENDANCEDATE IN ('+@days+')
-      )AS PVT'
-  exec(@query); 
-      `;
+      const employeeQuery = `EXEC GetMonthlyAttendanceReport @month = '${month}', @year = '${year}', @EmpID = '${empid}'`;
       db.connect(config, function (error) {
         if (error) {
           console.log(error);
@@ -1042,6 +1000,31 @@ module.exports = {
           }
           else {
             return res.status(200).json({ status: 'OK', data: result.recordset, message: "single employee report displayed" });
+          }
+        });
+      });
+    } catch (error) {
+      return res.status(500).json({ status: 'NOK', data: error, message: 'Internal server error' });
+    }
+  },
+  paidLeaves: (req, res) => {
+    const empid = req.query.empid;
+    try {
+      const paidLeaveQuery = `Select PaidLeave
+      from Users
+      where empid ='${empid}'`;
+      db.connect(config, function (error) {
+        if (error) {
+          console.log(error);
+          return res.status(500).json({ status: 'NOK', data: error, message: 'Database connection error' });
+        }
+        var request = new db.Request();
+        request.query(paidLeaveQuery, (error, result) => {
+          if (error) {
+            return res.status(404).json({ status: 'Not Found', data: error, message: "Error fetching paid leaves" })
+          }
+          else {
+            return res.status(200).json({ status: 'OK', data: result.recordset, message: "paid leaves displayed" });
           }
         });
       });
@@ -1080,7 +1063,9 @@ module.exports = {
       const empLeavesQuery = `SELECT 
 	    u.empid AS EmpID,
       u.name AS EmpName, 
-      ISNULL(SUM(lr.NoOfLeave),0) AS LeavesUsed
+	  u.PaidLeave AS PaidLeave,
+      ISNULL(SUM(lr.NoOfLeave),0) AS LeavesUsed,
+	  (u.PaidLeave-ISNULL(SUM(lr.NoOfLeave),0)) AS Balance
       FROM Users u 
       LEFT JOIN 
         (
@@ -1089,8 +1074,8 @@ module.exports = {
           and YEAR(lr.FromDate) = YEAR(GETDATE())
         )lr 
           ON u.empid = lr.EmpID
-          WHERE u.isStatus = 1 AND u.empid NOT IN ('ML01', 'ML02', 'ML35')
-          GROUP BY u.empid, u.name
+          WHERE u.isStatus = 1 AND u.empid NOT IN ('001', '003', 'ML35')
+          GROUP BY u.empid, u.name, u.PaidLeave
           ORDER BY u.empid;`;
       db.connect(config, function (error) {
         if (error) {
@@ -1158,7 +1143,7 @@ module.exports = {
           FORMAT(ISNULL(al.NoOfLeave, 0), 'N1') AS LeavesUsed
       FROM Users u
       LEFT JOIN AggregatedLeave al ON u.EmpID = al.EmpID
-      WHERE u.isStatus = 1 AND u.empid NOT IN ('ML01', 'ML02', 'ML35')
+      WHERE u.isStatus = 1 AND u.empid NOT IN ('001', '003', 'ML35')
       ORDER BY u.EmpID;`;
       db.connect(config, function (error) {
         if (error) {
@@ -1187,7 +1172,7 @@ module.exports = {
         FORMAT(ToDate, 'dd-MMMM-yyyy') AS ToDate,
         NoOfLeave as Days, Status 
       FROM LeaveRecord
-        WHERE CAST(GETDATE() AS DATE) BETWEEN FromDate AND ToDate
+        WHERE CAST(GETDATE() AS DATE) <= ToDate
         and EmpID='${empid}'
         ORDER BY CAST(FromDate AS DATE) ASC`;
       db.connect(config, function (error) {
@@ -1294,6 +1279,7 @@ ORDER BY
           SELECT COUNT(DISTINCT CAST(logintime AS DATE))
           FROM LoginRecord
           WHERE FORMAT(logintime, 'yyyy-MM') = FORMAT(GETDATE(), 'yyyy-MM')
+          AND CAST(logintime AS DATE) <= CAST(GETDATE() AS DATE)
       );
       
       -- Calculate total off days (absent days) in the current month
@@ -1350,7 +1336,12 @@ ORDER BY
       DECLARE @WorkingDays INT = (
           SELECT COUNT(DISTINCT CAST(logintime AS DATE))
           FROM LoginRecord
-          WHERE FORMAT(logintime, 'yyyy-MM') = FORMAT(@CurrentMonthStart, 'yyyy-MM')
+          WHERE logintime >= @CurrentMonthStart
+		  AND logintime <= 
+		  CASE
+		    WHEN FORMAT(@CurrentMonthStart, 'yyyy-MM') = FORMAT(GETDATE(), 'yyyy-MM') THEN GETDATE()
+		    ELSE EOMONTH(@CurrentMonthStart)
+		  END
       );
       
       -- Calculate total off days (absent days) in the current month
@@ -1556,15 +1547,35 @@ VALUES
 
       if (userType == 1) {
         pendingQuery = `select 
-                        ROW_NUMBER() OVER (ORDER BY fromDate desc) AS SNo, id,
+                        ROW_NUMBER() OVER (
+        ORDER BY 
+            CASE 
+                WHEN Status = 'Pending' THEN id 
+                ELSE NULL 
+            END DESC,
+            CASE 
+                WHEN Status <> 'Pending' THEN fromDate 
+                ELSE NULL 
+            END DESC
+    ) AS SNo, id,
                         EmpID, EmpName, 
                         FORMAT(fromDate, 'dd-MMM-yyyy') AS fromDate,
                         FORMAT(toDate, 'dd-MMM-yyyy') AS toDate,
                         Mode, FirstHalf, SecondHalf, Reason, Status, Remarks
                         from [OfficialDuty]`;
-      } else if (userType == 2) {
+      } else if (userType == 2 || userType == 3) {
         pendingQuery = `select 
-                        ROW_NUMBER() OVER (ORDER BY fromDate desc) AS SNo, id,
+                        ROW_NUMBER() OVER (
+        ORDER BY 
+            CASE 
+                WHEN Status = 'Pending' THEN id 
+                ELSE NULL 
+            END DESC,
+            CASE 
+                WHEN Status <> 'Pending' THEN fromDate 
+                ELSE NULL 
+            END DESC
+    ) AS SNo, id,
                         EmpID, EmpName, 
                         FORMAT(fromDate, 'dd-MMM-yyyy') AS fromDate,
                         FORMAT(toDate, 'dd-MMM-yyyy') AS toDate,
@@ -1595,7 +1606,17 @@ VALUES
     const empid = req.query.empid;
     try {
       let eachEmpODQuery = `select 
-                                ROW_NUMBER() OVER (ORDER BY fromDate desc) AS SNo, id,
+                                ROW_NUMBER() OVER (
+        ORDER BY 
+            CASE 
+                WHEN Status = 'Pending' THEN id 
+                ELSE NULL 
+            END DESC,
+            CASE 
+                WHEN Status <> 'Pending' THEN fromDate 
+                ELSE NULL 
+            END DESC
+    ) AS SNo, id,
                                 EmpID, EmpName, 
                                 FORMAT(fromDate, 'dd-MMM-yyyy') AS fromDate,
                                 FORMAT(toDate, 'dd-MMM-yyyy') AS toDate,
@@ -1705,7 +1726,7 @@ VALUES
     const endDate = req.query.endDate;
     try {
       const fetchOfficialDutyQuery = `  select 
-      ROW_NUMBER() OVER (ORDER BY fromDate) AS SNo, id,
+      ROW_NUMBER() OVER (ORDER BY id) AS SNo, id,
       Empid, EmpName, 
       FORMAT(FromDate, 'dd-MMM-yyyy') AS FromDate,
       FORMAT(ToDate, 'dd-MMM-yyyy') AS ToDate,
@@ -1826,69 +1847,7 @@ VALUES
   insertODLogin: (req, res) => {
     const id = req.body.Id;
     try {
-      const ODLoginQuery = `
-       DECLARE @startDate DATE;
-       DECLARE @endDate DATE;
-       DECLARE @empid NVARCHAR(50);
-       DECLARE @username NVARCHAR(50);
-       DECLARE @fullName NVARCHAR(100);
-	     DECLARE @morning NVARCHAR(100);
-	     DECLARE @evening NVARCHAR(100);
-
-    SELECT 
-    @empid = od.empid, 
-    @username = u.username, 
-    @fullName = od.empName, 
-    @startDate = od.FromDate, 
-    @endDate = od.ToDate,
-    @morning = od.FirstHalf,
-    @evening = od.SecondHalf
-    FROM OfficialDuty od
-    JOIN Users u ON od.empid = u.empid
-    WHERE od.ID = '${id}';
-
-    IF @startDate IS NOT NULL AND @endDate IS NOT NULL
-    BEGIN
-        WHILE @startDate <= @endDate
-        BEGIN
-            DECLARE @logintime DATETIME = CAST(CONVERT(varchar, @startDate, 23) + ' 09:00:00' AS DATETIME);
-            DECLARE @logouttime DATETIME = CAST(CONVERT(varchar, @startDate, 23) + ' 17:30:00' AS DATETIME);
-              
-            -- Check if logintime already exists
-            IF EXISTS (SELECT 1 FROM LoginRecord WHERE username = @username AND CONVERT(DATE, logintime) = @startDate)
-            BEGIN
-                --Update logintime to 9:00am
-                IF @morning = '1' AND @evening = '0'
-				BEGIN
-                    UPDATE LoginRecord
-                    SET logintime = @logintime
-                    WHERE username = @username AND CONVERT(DATE, logintime) = @startDate;
-                END
-                ELSE IF @morning = '0' AND @evening = '1'
-                BEGIN
-                    -- Update logouttime to 5:30pm of logintime date
-                    UPDATE LoginRecord
-                    SET logoutTime = @logouttime
-                    WHERE username = @username AND CONVERT(DATE, logintime) = @startDate;
-                END
-				ELSE IF @morning = '0' AND @evening = '0'
-                BEGIN
-                    -- Update logintime and logouttime for the date
-                    UPDATE LoginRecord
-                    SET logintime = @logintime, logoutTime = @logouttime
-                    WHERE username = @username AND CONVERT(DATE, logintime) = @startDate;
-                END
-            END
-            ELSE
-            BEGIN
-                -- Insert new record if logintime does not exist
-                INSERT INTO LoginRecord (username, logintime, fullName, logoutTime, empid)
-                VALUES (@username, @logintime, @fullName, @logouttime, @empid);
-            END
-              
-            SET @startDate = DATEADD(DAY, 1, @startDate);
-        END
-    END`;
+      const ODLoginQuery = ` EXEC InsertOfficialDuty @id = ${id}`;
       db.connect(config, function (error) {
         if (error) {
           console.log(error);
@@ -1911,12 +1870,12 @@ VALUES
   addTroubleshoot: (req, res) => {
     const issueDate = req.body.issueDate.trim();
     const issue = req.body.Issue.trim();
-
+    const recordedBy = req.body.recordedBy.trim();
     try {
       const addOfficialDutyQuery = `
       INSERT INTO Troubleshoot 
-      (issueDate, Issue) 
-      VALUES ('${issueDate}', '${issue}');`;
+      (issueDate, Issue, RecordedBy) 
+      VALUES ('${issueDate}', '${issue}', '${recordedBy}');`;
       db.connect(config, function (error) {
         if (error) {
           console.log(error);
@@ -1942,8 +1901,7 @@ VALUES
         SELECT 
 	        ROW_NUMBER() Over (Order by issueDate DESC) As SNo,
 	        FORMAT(issueDate, 'dd-MMM-yyyy') As issueDate,
-	        Issue
-        FROM Troubleshoot;`;
+	        Issue, RecordedBy FROM Troubleshoot;`;
       db.connect(config, function (error) {
         if (error) {
           console.log(error);
@@ -1956,6 +1914,601 @@ VALUES
           }
           else {
             return res.status(200).json({ status: 'OK', data: result.recordset, message: "Issue records displayed" });
+          }
+        });
+      });
+    } catch (error) {
+      return res.status(500).json({ status: 'NOK', data: error, message: 'Internal server error' });
+    }
+  },
+  salaryReportMonthWise: (req, res) => {
+    const { MonthYear } = req.query;
+    try {
+      const salaryReportQuery = `EXEC [GetMonthlyEmployeeData] @MonthYear = '${MonthYear}'`;
+      db.connect(config, function (error) {
+        if (error) {
+          console.log(error);
+          return res.status(500).json({ status: 'NOK', data: error, message: 'Database connection error' });
+        }
+        var request = new db.Request();
+        request.query(salaryReportQuery, (error, result) => {
+          if (error) {
+            return res.status(404).json({ status: 'Not Found', data: error, message: "Error fetching salary report" })
+          }
+          else {
+            return res.status(200).json({ status: 'OK', data: result.recordset, message: "Salary report displayed" });
+          }
+        });
+      });
+    } catch (error) {
+      return res.status(500).json({ status: 'NOK', data: error, message: 'Internal server error' });
+    }
+  },
+  getInformation: (req, res) => {
+    const empid = req.query.empid;
+    try {
+      const getInfoQuery = `
+      SELECT 
+        empid,
+        name,
+        emailID,
+        contactNo,
+        secondaryContact,
+        CAST(birthday AS DATE) AS Birthday,
+        CAST(joiningDate AS DATE) AS joiningDate,
+        qualification,
+        skillSet1,
+        skillSet2,
+        skillSet3,
+        skillSet4,
+        designation 
+      from Users where empid = '${empid}'`;
+      db.connect(config, function (error) {
+        if (error) {
+          console.log(error);
+          return res.status(500).json({ status: 'NOK', data: error, message: 'Database connection error' });
+        }
+        var request = new db.Request();
+        request.query(getInfoQuery, (error, result) => {
+          if (error) {
+            return res.status(404).json({ status: 'Not Found', data: error, message: "Error fetching employee info" })
+          }
+          else {
+            return res.status(200).json({ status: 'OK', data: result.recordset, message: "Employee info displayed" });
+          }
+        });
+      });
+    } catch (error) {
+      return res.status(500).json({ status: 'NOK', data: error, message: 'Internal server error' });
+    }
+  },
+  updateEmail: (req, res) => {
+    const empid = req.body.empid;
+    const email = req.body.email;
+    try {
+      const updateEmailQuery = `UPDATE Users
+      set emailID = '${email}'
+      where empid = '${empid}';`;
+      db.connect(config, function (error) {
+        if (error) {
+          console.log(error);
+          return res.status(500).json({ status: 'NOK', data: error, message: 'Database connection error' });
+        }
+        var request = new db.Request();
+        request.query(updateEmailQuery, (error, result) => {
+          if (error) {
+            return res.status(404).json({ status: 'Not Found', data: error, message: "Error updating email" })
+          }
+          else {
+            return res.status(200).json({ status: 'OK', data: result.recordset, message: "Email updated" });
+          }
+        });
+      });
+    } catch (error) {
+      return res.status(500).json({ status: 'NOK', data: error, message: 'Internal server error' });
+    }
+  },
+  updateContact: (req, res) => {
+    const empid = req.body.empid;
+    const contact = req.body.contact;
+    try {
+      const updateContactQuery = `UPDATE Users
+      set contactNo = '${contact}'
+      where empid = '${empid}';`;
+      db.connect(config, function (error) {
+        if (error) {
+          console.log(error);
+          return res.status(500).json({ status: 'NOK', data: error, message: 'Database connection error' });
+        }
+        var request = new db.Request();
+        request.query(updateContactQuery, (error, result) => {
+          if (error) {
+            return res.status(404).json({ status: 'Not Found', data: error, message: "Error updating contact" })
+          }
+          else {
+            return res.status(200).json({ status: 'OK', data: result.recordset, message: "Contact updated" });
+          }
+        });
+      });
+    } catch (error) {
+      return res.status(500).json({ status: 'NOK', data: error, message: 'Internal server error' });
+    }
+  },
+  updateSecondaryContact: (req, res) => {
+    const empid = req.body.empid;
+    const secondaryContact = req.body.secondaryContact;
+    try {
+      const updateSecondaryContactQuery = `UPDATE Users
+      set secondaryContact = '${secondaryContact}'
+      where empid = '${empid}';`;
+      db.connect(config, function (error) {
+        if (error) {
+          console.log(error);
+          return res.status(500).json({ status: 'NOK', data: error, message: 'Database connection error' });
+        }
+        var request = new db.Request();
+        request.query(updateSecondaryContactQuery, (error, result) => {
+          if (error) {
+            return res.status(404).json({ status: 'Not Found', data: error, message: "Error updating contact" })
+          }
+          else {
+            return res.status(200).json({ status: 'OK', data: result.recordset, message: "Contact updated" });
+          }
+        });
+      });
+    } catch (error) {
+      return res.status(500).json({ status: 'NOK', data: error, message: 'Internal server error' });
+    }
+  },
+  updateQualification: (req, res) => {
+    const empid = req.body.empid;
+    const qualification = req.body.qualification;
+    try {
+      const updateQualificationQuery = `UPDATE Users
+      set qualification = '${qualification}'
+      where empid = '${empid}';`;
+      db.connect(config, function (error) {
+        if (error) {
+          console.log(error);
+          return res.status(500).json({ status: 'NOK', data: error, message: 'Database connection error' });
+        }
+        var request = new db.Request();
+        request.query(updateQualificationQuery, (error, result) => {
+          if (error) {
+            return res.status(404).json({ status: 'Not Found', data: error, message: "Error updating qualification" })
+          }
+          else {
+            return res.status(200).json({ status: 'OK', data: result.recordset, message: "Qualification updated" });
+          }
+        });
+      });
+    } catch (error) {
+      return res.status(500).json({ status: 'NOK', data: error, message: 'Internal server error' });
+    }
+  },
+  updateSkillSet1: (req, res) => {
+    const empid = req.body.empid;
+    const skillSet1 = req.body.skillSet1;
+    try {
+      const updateSkillSet1Query = `UPDATE Users
+      set skillSet1 = '${JSON.stringify(skillSet1)}'
+      where empid = '${empid}';`;
+      db.connect(config, function (error) {
+        if (error) {
+          console.log(error);
+          return res.status(500).json({ status: 'NOK', data: error, message: 'Database connection error' });
+        }
+        var request = new db.Request();
+        request.query(updateSkillSet1Query, (error, result) => {
+          if (error) {
+            return res.status(404).json({ status: 'Not Found', data: error, message: "Error updating skills" })
+          }
+          else {
+            return res.status(200).json({ status: 'OK', data: result.recordset, message: "Skills updated" });
+          }
+        });
+      });
+    } catch (error) {
+      return res.status(500).json({ status: 'NOK', data: error, message: 'Internal server error' });
+    }
+  },
+  updateSkillSet2: (req, res) => {
+    const empid = req.body.empid;
+    const skillSet2 = req.body.skillSet2;
+    try {
+      const updateSkillSet2Query = `UPDATE Users
+      set skillSet2 = '${JSON.stringify(skillSet2)}'
+      where empid = '${empid}';`;
+      db.connect(config, function (error) {
+        if (error) {
+          console.log(error);
+          return res.status(500).json({ status: 'NOK', data: error, message: 'Database connection error' });
+        }
+        var request = new db.Request();
+        request.query(updateSkillSet2Query, (error, result) => {
+          if (error) {
+            return res.status(404).json({ status: 'Not Found', data: error, message: "Error updating skills" })
+          }
+          else {
+            return res.status(200).json({ status: 'OK', data: result.recordset, message: "Skills updated" });
+          }
+        });
+      });
+    } catch (error) {
+      return res.status(500).json({ status: 'NOK', data: error, message: 'Internal server error' });
+    }
+  },
+  updateSkillSet3: (req, res) => {
+    const empid = req.body.empid;
+    const skillSet3 = req.body.skillSet3;
+    try {
+      const updateSkillSet3Query = `UPDATE Users
+      set skillSet3 = '${JSON.stringify(skillSet3)}'
+      where empid = '${empid}';`;
+      db.connect(config, function (error) {
+        if (error) {
+          console.log(error);
+          return res.status(500).json({ status: 'NOK', data: error, message: 'Database connection error' });
+        }
+        var request = new db.Request();
+        request.query(updateSkillSet3Query, (error, result) => {
+          if (error) {
+            return res.status(404).json({ status: 'Not Found', data: error, message: "Error updating skills" })
+          }
+          else {
+            return res.status(200).json({ status: 'OK', data: result.recordset, message: "Skills updated" });
+          }
+        });
+      });
+    } catch (error) {
+      return res.status(500).json({ status: 'NOK', data: error, message: 'Internal server error' });
+    }
+  },
+  updateSkillSet4: (req, res) => {
+    const empid = req.body.empid;
+    const skillSet4 = req.body.skillSet4;
+    try {
+      const updateSkillSet4Query = `UPDATE Users
+      set skillSet4 = '${JSON.stringify(skillSet4)}'
+      where empid = '${empid}';`;
+      db.connect(config, function (error) {
+        if (error) {
+          console.log(error);
+          return res.status(500).json({ status: 'NOK', data: error, message: 'Database connection error' });
+        }
+        var request = new db.Request();
+        request.query(updateSkillSet4Query, (error, result) => {
+          if (error) {
+            return res.status(404).json({ status: 'Not Found', data: error, message: "Error updating skills" })
+          }
+          else {
+            return res.status(200).json({ status: 'OK', data: result.recordset, message: "Skills updated" });
+          }
+        });
+      });
+    } catch (error) {
+      return res.status(500).json({ status: 'NOK', data: error, message: 'Internal server error' });
+    }
+  },
+  profilePictureUpload: (req, res) => {
+    try {
+      const { empid } = req.body;
+      const profilePicture = req.file.buffer;
+
+      const addleaveQuery = `MERGE [ProfileInfo] AS target
+      USING (SELECT @empid AS EmpId, @profilePicture AS Photo) AS source
+      ON (target.EmpId = source.EmpId)
+      WHEN MATCHED THEN
+        UPDATE SET [photo] = source.Photo
+      WHEN NOT MATCHED THEN
+        INSERT (EmpId, photo)
+        VALUES (source.EmpId, source.Photo);`;
+      var request = new db.Request();
+      request.input('profilePicture', db.VarBinary, profilePicture);
+      request.input('empid', db.NVarChar, empid);
+      db.connect(config, function (error) {
+        if (error) {
+          console.log(error);
+          return res.status(500).json({ status: 'NOK', data: error, message: 'Database connection error' });
+        }
+
+        request.query(addleaveQuery, (error, result) => {
+          if (error) {
+            return res.status(404).json({ status: 'NOK', data: error, message: "Error Uploading Image request" })
+          }
+          else {
+            return res.status(200).json({ status: 'OK', data: result.recordset, message: "Image Upload Successfully..!!" });
+          }
+        });
+      });
+    } catch (error) {
+      return res.status(500).json({ status: 'NOK', data: error, message: 'Internal server error' });
+    }
+  },
+  getProfilePhoto: (req, res) => {
+    try {
+      const { empid_ } = req.query;
+      const fetchQuery = `SELECT [photo] FROM [ProfileInfo] WHERE [EmpId] = @empid`;
+      db.connect(config, function (error) {
+        if (error) {
+          console.log(error);
+          return res.status(500).json({ status: 'NOK', data: error, message: 'Database connection error' });
+        }
+        var request = new db.Request();
+        request.input('empid', db.VarChar, empid_);
+        request.query(fetchQuery, (error, result) => {
+          if (error) {
+            return res.status(404).json({ status: 'NOK', data: error, message: "Error fetching image" });
+          } else if (result.recordset.length > 0) {
+            const imageBuffer = result.recordset[0].photo;
+            res.setHeader('Content-Type', 'image/jpeg'); // adjust the content type based on the stored image format
+            res.send(imageBuffer);
+          } else {
+            return res.status(404).json({ status: 'NOK', message: "Image not found" });
+          }
+        });
+      });
+    } catch (error) {
+      return res.status(500).json({ status: 'NOK', data: error, message: 'Internal server error' });
+    }
+  },
+  getPersonalDetails: (req, res) => {
+    const empid = req.query.empid;
+    try {
+      const getInfoQuery = `
+      SELECT 
+      empid, empName,
+      currentAddress,
+      sameAsCurrent,
+      permanentAddress,
+      Dependency
+      FROM PersonalDetails
+      WHERE empid = '${empid}'`;
+      db.connect(config, function (error) {
+        if (error) {
+          console.log(error);
+          return res.status(500).json({ status: 'NOK', data: error, message: 'Database connection error' });
+        }
+        var request = new db.Request();
+        request.query(getInfoQuery, (error, result) => {
+          if (error) {
+            return res.status(404).json({ status: 'Not Found', data: error, message: "Error fetching personal details" })
+          }
+          else {
+            return res.status(200).json({ status: 'OK', data: result.recordset, message: "Personal details displayed" });
+          }
+        });
+      });
+    } catch (error) {
+      return res.status(500).json({ status: 'NOK', data: error, message: 'Internal server error' });
+    }
+  },
+  updateCurrentAddress: (req, res) => {
+    const empid = req.body.empid;
+    const currentAddress = req.body.currentAddress;
+    try {
+      const updateCurrentAddressQuery = `UPDATE PersonalDetails
+      set currentAddress = '${JSON.stringify(currentAddress)}'
+      where empid = '${empid}';`;
+      db.connect(config, function (error) {
+        if (error) {
+          console.log(error);
+          return res.status(500).json({ status: 'NOK', data: error, message: 'Database connection error' });
+        }
+        var request = new db.Request();
+        request.query(updateCurrentAddressQuery, (error, result) => {
+          if (error) {
+            return res.status(404).json({ status: 'Not Found', data: error, message: "Error updating current address" })
+          }
+          else {
+            return res.status(200).json({ status: 'OK', data: result.recordset, message: "Current address updated" });
+          }
+        });
+      });
+    } catch (error) {
+      return res.status(500).json({ status: 'NOK', data: error, message: 'Internal server error' });
+    }
+  },
+  updatePermanentAddress: (req, res) => {
+    const empid = req.body.empid;
+    const sameAsCurrent = req.body.sameAsCurrent;
+    const permanentAddress = req.body.permanentAddress;
+    try {
+      const updatePermanentAddressQuery = `UPDATE PersonalDetails
+      set sameAsCurrent = ${sameAsCurrent}, permanentAddress = '${JSON.stringify(permanentAddress)}'
+      where empid = '${empid}';`;
+      db.connect(config, function (error) {
+        if (error) {
+          console.log(error);
+          return res.status(500).json({ status: 'NOK', data: error, message: 'Database connection error' });
+        }
+        var request = new db.Request();
+        request.query(updatePermanentAddressQuery, (error, result) => {
+          if (error) {
+            return res.status(404).json({ status: 'Not Found', data: error, message: "Error updating permanent address" })
+          }
+          else {
+            return res.status(200).json({ status: 'OK', data: result.recordset, message: "Permanent address updated" });
+          }
+        });
+      });
+    } catch (error) {
+      return res.status(500).json({ status: 'NOK', data: error, message: 'Internal server error' });
+    }
+  },
+  documentUpload: (req, res) => {
+    try {
+      const { empId, uploadedBy } = req.body;
+      const filePath = req.file.path;
+      const fileName = req.body.docName;
+
+      const addDocumentQuery = `INSERT INTO Documents (EmpId, DocPath, DocName, UploadedBy) VALUES (@EmpId, @DocPath, @DocName, @UploadedBy)`;
+      const request = new db.Request();
+      request.input('UploadedBy', db.NVarChar, uploadedBy);
+      request.input('EmpId', db.NVarChar, empId);
+      request.input('DocPath', db.NVarChar, filePath);
+      request.input('DocName', db.NVarChar, fileName);
+
+      db.connect(config, function (error) {
+        if (error) {
+          console.log(error);
+          return res.status(500).json({ status: 'NOK', data: error, message: 'Database connection error' });
+        }
+
+        request.query(addDocumentQuery, (error, result) => {
+          if (error) {
+            console.error('Error executing SQL query:', error);
+            return res.status(500).json({ status: 'NOK', data: error, message: 'Error executing SQL query' });
+          }
+
+          return res.status(200).json({ status: 'OK', data: result.recordset, message: 'Document uploaded successfully' });
+        });
+      });
+    } catch (error) {
+      console.error('Internal server error:', error);
+      return res.status(500).json({ status: 'NOK', data: error, message: 'Internal server error' });
+    }
+  },
+  getDocuments: (req, res) => {
+    try {
+      const { empid_ } = req.query;
+      const fetchQuery = `SELECT ROW_NUMBER() Over (Order by id ASC) As SNo, id, DocName, DocPath, UploadedBy FROM Documents WHERE EmpId = @empid`;
+
+      db.connect(config, function (error) {
+        if (error) {
+          console.log(error);
+          return res.status(500).json({ status: 'NOK', data: error, message: 'Database connection error' });
+        }
+
+        var request = new db.Request();
+        request.input('empid', db.VarChar, empid_);
+        request.query(fetchQuery, (error, result) => {
+          if (error) {
+            return res.status(500).json({ status: 'NOK', data: error, message: 'Error fetching documents' });
+          } else {
+            return res.status(200).json({ status: 'OK', data: result.recordset, message: 'Documents fetched successfully' });
+          }
+        });
+      });
+    } catch (error) {
+      return res.status(500).json({ status: 'NOK', data: error, message: 'Internal server error' });
+    }
+  },
+  removeDocument: (req, res) => {
+    try {
+      const id  = req.query.id;
+      const findQuery = `SELECT DocPath FROM Documents WHERE id = @id`;
+      db.connect(config, function (error) {
+        if (error) {
+          console.log(error);
+          return res.status(500).json({ status: 'NOK', data: error, message: 'Database connection error' });
+        }
+
+        var request = new db.Request();
+        request.input('id', db.NVarChar, id);
+
+        request.query(findQuery, (error, result) => {
+          if (error) {
+            return res.status(404).json({ status: 'NOK', data: error, message: "Error finding document" });
+          }
+
+          if (result.recordset.length === 0) {
+            return res.status(404).json({ status: 'NOK', message: "Document not found" });
+          }
+
+          const filePath = result.recordset[0].DocPath;
+          const fullFilePath = path.join(__dirname, '..', filePath);
+
+          // Delete the file from the public folder
+          fs.unlink(fullFilePath, (err) => {
+            if (err) {
+              return res.status(500).json({ status: 'NOK', message: 'Error deleting file from server', error: err });
+            }
+            const deleteQuery = `DELETE FROM Documents WHERE id = @id`;
+            request.query(deleteQuery, (error, result) => {
+              if (error) {
+                return res.status(404).json({ status: 'NOK', data: error, message: "Error deleting document" });
+              }
+              return res.status(200).json({ status: 'OK', message: "Document deleted successfully" });
+            });
+          });
+        });
+      });
+    } catch (error) {
+      return res.status(500).json({ status: 'NOK', data: error, message: 'Internal server error' });
+    }
+  },
+  updateDependency: (req, res) => {
+    const empid = req.body.empid;
+    const Dependency = req.body.Dependency;
+    try {
+      const updateDependencyQuery = `UPDATE PersonalDetails
+      set Dependency = '${JSON.stringify(Dependency)}'
+      where empid = '${empid}';`;
+      db.connect(config, function (error) {
+        if (error) {
+          console.log(error);
+          return res.status(500).json({ status: 'NOK', data: error, message: 'Database connection error' });
+        }
+        var request = new db.Request();
+        request.query(updateDependencyQuery, (error, result) => {
+          if (error) {
+            return res.status(404).json({ status: 'Not Found', data: error, message: "Error updating dependency" })
+          }
+          else {
+            return res.status(200).json({ status: 'OK', data: result.recordset, message: "Dependency updated" });
+          }
+        });
+      });
+    } catch (error) {
+      return res.status(500).json({ status: 'NOK', data: error, message: 'Internal server error' });
+    }
+  },
+  getHolidayList: (req, res) => {
+    try {
+      const fetchgetHolidayListQuery = `select 
+      ROW_NUMBER() Over (Order by [Date] ASC) As SNo, 
+      Format([Date], 'dd-MMM-yyyy') Date, [Day], 
+      [HolidayName] from Holiday`;
+      db.connect(config, function (error) {
+        if (error) {
+          console.log(error);
+          return res.status(500).json({ status: 'NOK', data: error, message: 'Database connection error' });
+        }
+        var request = new db.Request();
+        request.query(fetchgetHolidayListQuery, (error, result) => {
+          if (error) {
+            return res.status(404).json({ status: 'Not Found', data: error, message: "Error fetching issue records" })
+          }
+          else {
+            return res.status(200).json({ status: 'OK', data: result.recordset, message: "Issue records displayed" });
+          }
+        });
+      });
+    } catch (error) {
+      return res.status(500).json({ status: 'NOK', data: error, message: 'Internal server error' });
+    }
+  },
+  getEmployeeDOJ: (req, res) => {
+    try {
+      const getInfoQuery = `
+      SELECT 
+        empid,
+        name,
+        CAST(joiningDate AS DATE) AS joiningDate
+      from Users ORDER BY empid`;
+      db.connect(config, function (error) {
+        if (error) {
+          console.log(error);
+          return res.status(500).json({ status: 'NOK', data: error, message: 'Database connection error' });
+        }
+        var request = new db.Request();
+        request.query(getInfoQuery, (error, result) => {
+          if (error) {
+            return res.status(404).json({ status: 'Not Found', data: error, message: "Error fetching employee info" })
+          }
+          else {
+            return res.status(200).json({ status: 'OK', data: result.recordset, message: "Employee info displayed" });
           }
         });
       });
