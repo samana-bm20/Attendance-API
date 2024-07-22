@@ -213,14 +213,22 @@ module.exports = {
     const designation = req.body.designation.trim();
     const empid = req.body.empid.trim();
     const birthday = new Date(req.body.birthday);
+    const joiningDate = new Date(req.body.joiningDate);
     const paidLeave = req.body.paidLeave;
-    const fromDate = birthday.toLocaleDateString('en-GB', {
+    
+    const dob = birthday.toLocaleDateString('en-GB', {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric'
+    }).replace(/ /g, '-');
+
+    const doj = joiningDate.toLocaleDateString('en-GB', {
       day: '2-digit',
       month: 'short',
       year: 'numeric'
     }).replace(/ /g, '-');
     try {
-      const hashedPassword = await bcrypt.hash(password, saltRounds);
+      // const hashedPassword = await bcrypt.hash(password, saltRounds);
       let addRegisterQuery = `SELECT username FROM Users where username='${username}'`;
       db.connect(config, function (error) {
         if (error) {
@@ -253,26 +261,46 @@ module.exports = {
                       return res.status(200).json({ status: 'NOK', data: result.recordset, message: "Employee Id already exists" });
                     }
                     else {
-                      const addleaveQuery = `INSERT INTO [dbo].[Users] 
+                      const addUserQuery = `INSERT INTO [dbo].[Users] 
                       ([username] ,[password] ,[name] ,
                       [designation] ,[empid] ,[userType] ,
-                      [isStatus] ,[birthday], [PaidLeave]) 
+                      [isStatus] ,[birthday], [PaidLeave], [joiningDate]) 
                       VALUES 
-                      ('${username}' ,'${hashedPassword}' ,
+                      ('${username}' ,'${password}' ,
                       '${name}' ,'${designation}' ,
-                      '${empid}' ,2,1,'${fromDate}', ${paidLeave})`;
+                      '${empid}', 2, 1,'${dob}', ${paidLeave}, '${doj}')`;
+
+                      const addPersonalQuery = `INSERT INTO [dbo].[PersonalDetails] 
+                      ([empid] ,[empName]) VALUES ('${empid}' , '${name}')`;
+
+                      const addProfileQuery = `INSERT INTO [dbo].[ProfileInfo] (EmpId, photo)
+                        SELECT '${empid}', photo FROM ProfileInfo
+                        WHERE EmpId = 'ML35'`;
+
                       db.connect(config, function (error) {
                         if (error) {
                           console.log(error);
                           return res.status(500).json({ status: 'NOK', data: error, message: 'Database connection error' });
                         }
                         var request = new db.Request();
-                        request.query(addleaveQuery, (error, result) => {
+                        request.query(addUserQuery, (error, result) => {
                           if (error) {
-                            return res.status(404).json({ status: 'NOK', data: error, message: "Error adding leave request" })
+                            return res.status(404).json({ status: 'NOK', data: error, message: "Error adding new employee" })
                           }
                           else {
-                            return res.status(200).json({ status: 'OK', data: result.recordset, message: "Employee has been successfuly added" });
+                            request.query(addPersonalQuery, (error, result) => {
+                              if (error) {
+                                return res.status(404).json({ status: 'NOK', data: error, message: "Error adding data to second table" });
+                              } else {
+                                request.query(addProfileQuery, (error, result) => {
+                                  if (error) {
+                                    return res.status(404).json({ status: 'NOK', data: error, message: "Error adding data to third table" });
+                                  } else {
+                                    return res.status(200).json({ status: 'OK', data: result.recordset, message: "Employee has been successfully added" });
+                                  }
+                                });                              
+                              }
+                            });
                           }
                         });
                       });
@@ -938,7 +966,8 @@ module.exports = {
   },
   empIdName: (req, res) => {
     try {
-      const empIdNameQuery = `SELECT empid, name FROM Users WHERE isStatus = 1 ORDER BY empid;`;
+      const empIdNameQuery = `SELECT empid, name FROM Users WHERE isStatus = 1 
+      AND empid NOT IN('001', '003', 'ML35') ORDER BY empid;`;
       db.connect(config, function (error) {
         if (error) {
           console.log(error);
@@ -2396,7 +2425,7 @@ VALUES
   },
   removeDocument: (req, res) => {
     try {
-      const id  = req.query.id;
+      const id = req.query.id;
       const findQuery = `SELECT DocPath FROM Documents WHERE id = @id`;
       db.connect(config, function (error) {
         if (error) {
