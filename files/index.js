@@ -156,7 +156,7 @@ module.exports = {
     }
   },
   allRecord: (req, res) => {
-    const username = req.query.username;
+    const empid = req.query.empid;
     const startDate = req.query.startDate;
     const endDate = req.query.endDate;
     try {
@@ -177,9 +177,9 @@ module.exports = {
                 FORMAT(MIN(lr.logintime), 'hh:mm tt') AS LoginTime
             FROM DateRange dr
             LEFT JOIN LoginRecord lr ON FORMAT(lr.logintime, 'dd-MMM-yyyy') = FORMAT(dr.Date, 'dd-MMM-yyyy')
-                AND lr.username = '${username}'
+                AND lr.empid = '${empid}'
 				where CAST(dr.Date AS DATE) >= (
-				select CAST(min(lr.logintime) AS DATE) from LoginRecord lr where lr.username = '${username}'
+				select CAST(min(lr.logintime) AS DATE) from LoginRecord lr where lr.empid = '${empid}'
 				)
             GROUP BY dr.Date
             OPTION (MAXRECURSION 0);`;
@@ -215,7 +215,7 @@ module.exports = {
     const birthday = new Date(req.body.birthday);
     const joiningDate = new Date(req.body.joiningDate);
     const paidLeave = req.body.paidLeave;
-    
+
     const dob = birthday.toLocaleDateString('en-GB', {
       day: '2-digit',
       month: 'short',
@@ -298,7 +298,7 @@ module.exports = {
                                   } else {
                                     return res.status(200).json({ status: 'OK', data: result.recordset, message: "Employee has been successfully added" });
                                   }
-                                });                              
+                                });
                               }
                             });
                           }
@@ -475,7 +475,7 @@ module.exports = {
     }
   },
   fetchLeave: (req, res) => {
-    const empname = req.query.empname;
+    const empid = req.query.empid;
     const startDate = req.query.startDate;
     const endDate = req.query.endDate;
     try {
@@ -486,7 +486,7 @@ module.exports = {
       FORMAT(ToDate, 'dd-MMM-yyyy') AS ToDate,
       NoOfLeave, FirstHalf, SecondHalf, 
       Reason, Status, Remarks
-      from LeaveRecord where EmpName = '${empname}'
+      from LeaveRecord where EmpID = '${empid}'
       AND (
         (FromDate BETWEEN '${startDate}' AND '${endDate}')
         OR (ToDate BETWEEN '${startDate}' AND '${endDate}')
@@ -919,9 +919,22 @@ module.exports = {
   checkAllAbsent: (req, res) => {
     const date = req.query.date;
     try {
-      let absentQuery = `SELECT CASE WHEN COUNT(*) = 0 THEN 1 ELSE 0 END AS allAbsent
-      FROM LoginRecord
-      WHERE CAST(logintime AS DATE) = '${date}' AND logintime IS NOT NULL`;
+      let absentQuery = `SELECT CASE 
+           WHEN (totalUsers - loggedInUsers) > (totalUsers / 2) 
+           THEN 1 
+           ELSE 0 
+       END AS allAbsent
+FROM (
+    SELECT 
+        (SELECT COUNT(*) FROM Users) AS totalUsers,
+        (SELECT COUNT(*) 
+         FROM LoginRecord 
+         WHERE CAST(logintime AS DATE) = '${date}' AND logintime IS NOT NULL
+        ) AS loggedInUsers
+) AS counts;  `;
+      // let absentQuery = `SELECT CASE WHEN COUNT(*) = 0 THEN 1 ELSE 0 END AS allAbsent
+      // FROM LoginRecord
+      // WHERE CAST(logintime AS DATE) = '${date}' AND logintime IS NOT NULL`;
 
       db.connect(config, function (error) {
         if (error) {
@@ -1357,45 +1370,7 @@ ORDER BY
     const viewdate = req.query.viewdate;
     const empid = req.query.empid;
     try {
-      const countQuery = `-- Calculate total days in the current month
-      DECLARE @TotalDaysInMonth INT = 30;
-	  DECLARE @CurrentMonthStart DATE = '${viewdate}';
-      
-      -- Calculate the number of distinct working days (days with login records) in the current month
-      DECLARE @WorkingDays INT = (
-          SELECT COUNT(DISTINCT CAST(logintime AS DATE))
-          FROM LoginRecord
-          WHERE logintime >= @CurrentMonthStart
-		  AND logintime <= 
-		  CASE
-		    WHEN FORMAT(@CurrentMonthStart, 'yyyy-MM') = FORMAT(GETDATE(), 'yyyy-MM') THEN GETDATE()
-		    ELSE EOMONTH(@CurrentMonthStart)
-		  END
-      );
-      
-      -- Calculate total off days (absent days) in the current month
-      DECLARE @TotalOff INT = @TotalDaysInMonth - @WorkingDays;
-      
-      -- Display the results
-      SELECT
-          @TotalDaysInMonth AS TotalDays,
-          @WorkingDays AS WorkingDays,
-          @TotalOff AS TotalOff,
-          @WorkingDays-(Present) AS Absent,
-          Present,
-          COALESCE(Late, 0) AS Late
-      FROM (
-          SELECT
-              COUNT(logintime) AS Present,
-              SUM( CASE WHEN FORMAT(logintime ,'hh:mm') > '09:00' THEN 1 ELSE 0 END   ) AS Late
-          FROM(
-            SELECT MIN(logintime) logintime
-            FROM LoginRecord
-            WHERE FORMAT(logintime, 'yyyy-MM') = FORMAT(@CurrentMonthStart, 'yyyy-MM')
-              AND empid = '${empid}'
-              GROUP BY CAST(LOGINTIME AS DATE)
-          )IT
-      ) AS T;`;
+      const countQuery = `EXEC [CalculateAttendanceStatistics] @viewdate = '${viewdate}', @empid = '${empid}' `;
       db.connect(config, function (error) {
         if (error) {
           console.log(error);
@@ -1750,7 +1725,7 @@ VALUES
     }
   },
   fetchOfficialDuty: (req, res) => {
-    const empname = req.query.empname;
+    const empid = req.query.empid;
     const startDate = req.query.startDate;
     const endDate = req.query.endDate;
     try {
@@ -1761,7 +1736,7 @@ VALUES
       FORMAT(ToDate, 'dd-MMM-yyyy') AS ToDate,
       Mode, FirstHalf, SecondHalf, 
       Reason, Status, Remarks
-      from OfficialDuty where EmpName = '${empname}'
+      from OfficialDuty where Empid = '${empid}'
       AND (
         (FromDate BETWEEN '${startDate}' AND '${endDate}')
         OR (ToDate BETWEEN '${startDate}' AND '${endDate}')
