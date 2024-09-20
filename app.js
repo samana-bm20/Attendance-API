@@ -76,7 +76,7 @@ const { checkInDB, recordInTime, recordOutTime, displayLoginTime, displayLogoutT
     empLeaves, monthwiseLeaves, futureLeaves, countDays, workingHours, Monthwise, leaveCounts,
     changePassword, addRegister, UpdateRegister, RoleChange, FetchEmployee, addOfficialDuty,
     pendingOfficialDuty, eachEmpOfficialDuty, updateApproveForOD, updatePullbackForOD, updateRejectForOD,
-    fetchOfficialDuty, monthlyWorkingHours, insertWFHLogin, insertODLogin, addTroubleshoot, fetchIssue,
+    fetchOfficialDuty, monthlyWorkingHours, insertWFHLogin, insertODLogin, addLog, fetchLog, editLog, 
     salaryReportMonthWise, getInformation, updateEmail, updateContact, updateSecondaryContact, 
     updateQualification, updateSkillSet1, updateSkillSet2, updateSkillSet3, updateSkillSet4,
     profilePictureUpload, getProfilePhoto, getPersonalDetails, updateCurrentAddress, updatePermanentAddress,
@@ -138,8 +138,9 @@ app.get('/monthlyWorkingHours', monthlyWorkingHours);
 app.post('/insertWFHLogin', insertWFHLogin);
 app.post('/insertODLogin', insertODLogin);
 
-app.post('/addTroubleshoot', addTroubleshoot);
-app.get('/fetchIssue', fetchIssue);
+app.post('/addLog', addLog);
+app.put('/editLog', editLog);
+app.get('/fetchLog', fetchLog);
 app.get('/salaryReportMonthWise', salaryReportMonthWise);
 
 app.get('/getInformation', getInformation);

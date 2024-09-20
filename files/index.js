@@ -216,17 +216,9 @@ module.exports = {
     const joiningDate = new Date(req.body.joiningDate);
     const paidLeave = req.body.paidLeave;
 
-    const dob = birthday.toLocaleDateString('en-GB', {
-      day: '2-digit',
-      month: 'short',
-      year: 'numeric'
-    }).replace(/ /g, '-');
+    const dob = birthday.toISOString().split('T')[0];
 
-    const doj = joiningDate.toLocaleDateString('en-GB', {
-      day: '2-digit',
-      month: 'short',
-      year: 'numeric'
-    }).replace(/ /g, '-');
+    const doj = joiningDate.toISOString().split('T')[0];
     try {
       // const hashedPassword = await bcrypt.hash(password, saltRounds);
       let addRegisterQuery = `SELECT username FROM Users where username='${username}'`;
@@ -1871,27 +1863,27 @@ VALUES
       return res.status(500).json({ status: 'NOK', data: error, message: 'Internal server error' });
     }
   },
-  addTroubleshoot: (req, res) => {
-    const issueDate = req.body.issueDate.trim();
-    const issue = req.body.Issue.trim();
+  addLog: (req, res) => {
+    const logDate = req.body.logDate.trim();
+    const description = req.body.description.trim();
     const recordedBy = req.body.recordedBy.trim();
     try {
-      const addOfficialDutyQuery = `
-      INSERT INTO Troubleshoot 
-      (issueDate, Issue, RecordedBy) 
-      VALUES ('${issueDate}', '${issue}', '${recordedBy}');`;
+      const addLogQuery = `
+      INSERT INTO Log 
+      (logDate, description, RecordedBy) 
+      VALUES ('${logDate}', '${description}', '${recordedBy}');`;
       db.connect(config, function (error) {
         if (error) {
           console.log(error);
           return res.status(500).json({ status: 'NOK', data: error, message: 'Database connection error' });
         }
         var request = new db.Request();
-        request.query(addOfficialDutyQuery, (error, result) => {
+        request.query(addLogQuery, (error, result) => {
           if (error) {
-            return res.status(404).json({ status: 'NOK', data: error, message: "Error adding issue" })
+            return res.status(404).json({ status: 'NOK', data: error, message: "Error adding log" })
           }
           else {
-            return res.status(200).json({ status: 'OK', data: result.recordset, message: "Issue Added" });
+            return res.status(200).json({ status: 'OK', data: result.recordset, message: "Log Added" });
           }
         });
       });
@@ -1899,25 +1891,51 @@ VALUES
       return res.status(500).json({ status: 'NOK', data: error, message: 'Internal server error' });
     }
   },
-  fetchIssue: (req, res) => {
+  editLog: (req, res) => {
+    const id = req.body.id;
+    const logDate = req.body.logDate.trim();
+    const description = req.body.description.trim();
     try {
-      const fetchOfficialDutyQuery = `
-        SELECT 
-	        ROW_NUMBER() Over (Order by issueDate DESC) As SNo,
-	        FORMAT(issueDate, 'dd-MMM-yyyy') As issueDate,
-	        Issue, RecordedBy FROM Troubleshoot;`;
+      const editLogQuery = `
+       UPDATE Log SET logDate = '${logDate}', description = '${description}'where id=${id}`;
       db.connect(config, function (error) {
         if (error) {
           console.log(error);
           return res.status(500).json({ status: 'NOK', data: error, message: 'Database connection error' });
         }
         var request = new db.Request();
-        request.query(fetchOfficialDutyQuery, (error, result) => {
+        request.query(editLogQuery, (error, result) => {
           if (error) {
-            return res.status(404).json({ status: 'Not Found', data: error, message: "Error fetching issue records" })
+            return res.status(404).json({ status: 'NOK', data: error, message: "Error editing log" })
           }
           else {
-            return res.status(200).json({ status: 'OK', data: result.recordset, message: "Issue records displayed" });
+            return res.status(200).json({ status: 'OK', data: result.recordset, message: "Log Edited" });
+          }
+        });
+      });
+    } catch (error) {
+      return res.status(500).json({ status: 'NOK', data: error, message: 'Internal server error' });
+    }
+  },
+  fetchLog: (req, res) => {
+    try {
+      const fetchLogQuery = `
+        SELECT id,
+	        ROW_NUMBER() Over (Order by logDate DESC) As SNo,
+	        FORMAT(logDate, 'dd-MMM-yyyy') As logDate,
+	        description, RecordedBy FROM Log;`;
+      db.connect(config, function (error) {
+        if (error) {
+          console.log(error);
+          return res.status(500).json({ status: 'NOK', data: error, message: 'Database connection error' });
+        }
+        var request = new db.Request();
+        request.query(fetchLogQuery, (error, result) => {
+          if (error) {
+            return res.status(404).json({ status: 'Not Found', data: error, message: "Error fetching log records" })
+          }
+          else {
+            return res.status(200).json({ status: 'OK', data: result.recordset, message: "Log records displayed" });
           }
         });
       });
@@ -2482,10 +2500,10 @@ VALUES
         var request = new db.Request();
         request.query(fetchgetHolidayListQuery, (error, result) => {
           if (error) {
-            return res.status(404).json({ status: 'Not Found', data: error, message: "Error fetching issue records" })
+            return res.status(404).json({ status: 'Not Found', data: error, message: "Error fetching holiday records" })
           }
           else {
-            return res.status(200).json({ status: 'OK', data: result.recordset, message: "Issue records displayed" });
+            return res.status(200).json({ status: 'OK', data: result.recordset, message: "Holiday records displayed" });
           }
         });
       });
